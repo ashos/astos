@@ -23,41 +23,39 @@ use tree::*;
 use walkdir::WalkDir;
 
 //  Select file system foramt
-cfg_if::cfg_if! {
-    if #[cfg(feature = "btrfs")] {
-        mod btrfs;
-        use btrfs::*;
-    } // TODO add support for other file system formats
-}
+// Default use btrfs
+#[cfg(feature = "btrfs")]
+mod btrfs;
+#[cfg(feature = "btrfs")]
+use btrfs::*;
+#[cfg(feature = "zfs")] //TODO
+mod zfs;
+#[cfg(feature = "zfs")] //TODO
+use zfs::*;
 
 //  Select bootloader
-cfg_if::cfg_if! {
-    if #[cfg(feature = "grub")] {
-        mod grub;
-        use grub::*;
-    } // TODO add systemd-boot
-}
+#[cfg(feature = "grub")]
+mod grub;
+#[cfg(feature = "grub")]
+use grub::*;
+//TODO add systemd-boot
 
 // Select package manager
-cfg_if::cfg_if! {
-    //if #[cfg(feature = "apk")] {
-        //use ashpk::apk::*; // TODO
-    // } else
-    if #[cfg(feature = "apt")] {
-        use ashpk::apt::*;
-    } else if #[cfg(feature = "dnf")] {
-        use ashpk::dnf::*;
-    } else if #[cfg(feature = "pacman")] {
-        // Default
-        use ashpk::pacman::*;
-    //} else if #[cfg(feature = "pkgtool")] { // TODO
-        //use ashpk::pkgtool::*;
-    //} else if #[cfg(feature = "portage")] { // TODO
-        //use ashpk::portage::*;
-    //} else if #[cfg(feature = "xbps")] { // TODO
-        //use ashpk::xbps::*;
-    }
-}
+#[cfg(feature = "apk")]
+use ashpk::apk::*; // TODO
+#[cfg(feature = "apt")]
+use ashpk::apt::*;
+#[cfg(feature = "dnf")] // TODO
+use ashpk::dnf::*;
+#[cfg(feature = "pkgtool")] // TODO
+use ashpk::pkgtool::*;
+#[cfg(feature = "portage")] // TODO
+use ashpk::portage::*;
+#[cfg(feature = "xbps")] // TODO
+use ashpk::xbps::*;
+#[cfg(feature = "pacman")] // TODO
+// Default
+use ashpk::pacman::*;
 
 // Check if directory mutable
 fn allow_dir_mut(mount_path: &str) -> bool {
@@ -904,10 +902,19 @@ pub fn deploy(snapshot: &str, secondary: bool, reset: bool) -> Result<String, Er
         return Err(Error::new(ErrorKind::NotFound, format!("Cannot deploy as snapshot {} doesn't exist.", snapshot)));
 
     } else {
+        // Create rollback snapshot
+        let tmp = get_tmp();
+        if Path::new("/.snapshots/rootfs/snapshot-deploy-rollback").try_exists()? {
+            delete_subvolume("/.snapshots/rootfs/snapshot-deploy-rollback")?;
+        }
+        create_snapshot(&format!("/.snapshots/rootfs/snapshot-{}", tmp),
+                        "/.snapshots/rootfs/snapshot-deploy-rollback",
+                        false)?;
+
+        // Update bootloader
         update_boot(snapshot, secondary)?;
 
         // Set default volume
-        let tmp = get_tmp();
         #[cfg(feature = "btrfs")]
         btrfs::set_default(&format!("/.snapshots/rootfs/snapshot-{}", tmp))?;
         tmp_delete(secondary)?;
@@ -1356,6 +1363,7 @@ pub fn find_new() -> i32 {
 
 // FixDB
 pub fn fixdb(snapshot: &str) -> Result<(), Error> {
+    #[cfg(feature = "pacman")]
     fix_package_db(snapshot)?;
     Ok(())
 }
@@ -2851,6 +2859,9 @@ pub fn rebuild_base() -> Result<(), Error> {
             post_transactions(snapshot)?;
         } else {
             chr_delete(snapshot)?;
+            return Err(Error::new(
+                ErrorKind::Other,
+                "Rebuild failed and changes discarded."));
         }
     }
     Ok(())
@@ -3013,7 +3024,7 @@ pub fn reset() -> Result<(), Error> {
 
 // Rollback last booted deployment
 pub fn rollback() -> Result<(), Error> {
-    let tmp = get_tmp();
+    let tmp = "deploy-rollback";
     let i = find_new();
     clone_as_tree(&tmp, "")?;
     write_desc(&i.to_string(), " rollback ", false)?;

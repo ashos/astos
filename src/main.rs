@@ -10,13 +10,13 @@ use std::io::Write;
 use std::path::Path;
 use std::process::Command;
 
-//  Select Bootloader
-cfg_if::cfg_if! {
-    if #[cfg(feature = "grub")] {
-        mod grub;
-        use grub::update_boot;
-    } //TODO add systemd-boot
-}
+// Select Bootloader
+#[cfg(feature = "grub")]
+mod grub;
+#[cfg(feature = "grub")]
+use grub::update_boot;
+//TODO add systemd-boot
+
 
 // Directories
 // Global boot is always at @boot
@@ -25,6 +25,7 @@ cfg_if::cfg_if! {
 // *-deploy[-aux]-secondary          : temporary directories used to boot secondary deployed snapshot
 // *-recovery-deploy[-aux]           : temporary directories used to boot deployed recovery snapshot
 // /.snapshots/ash/deploy-tmp        : deployed snapshots temporary boot directories
+// /.snapshots/ash/ash-{distro_name} : ash binary file location
 // /.snapshots/ash/export            : default export path
 // /.snapshots/ash/part              : root partition uuid
 // /.snapshots/ash/snapshots/*-desc  : snapshots descriptions
@@ -36,7 +37,7 @@ cfg_if::cfg_if! {
 // /.snapshots/tmp                   : temporary directory
 // /etc/ash/ash.conf                 : configuration file for ash
 // /etc/ash/profile                  : snapshot profile
-// /usr/sbin/ash                     : ash binary file location
+// /usr/sbin/ash                     : symlink to /.snapshots/ash/ash
 // /usr/share/ash                    : files that store current snapshot info
 // /use/share/ash/profiles           : default desktop environments profiles path
 // /use/share/ash/rec-tmp            : name of temporary directory used to boot recovery snapshot
@@ -66,7 +67,11 @@ fn main() {
                 };
 
                 // Run noninteractive_update
-                noninteractive_update(&snapshot).unwrap();
+                let run = noninteractive_update(&snapshot);
+                match run {
+                    Ok(_) => println!("The auto-upgrade has been completed successfully."),
+                    Err(e) => eprintln!("{}", e),
+                }
             }
             // Base import
             Some(("base-import", base_import_matches)) => {
@@ -101,13 +106,17 @@ fn main() {
                         },
                     }
                 } else {
-                    eprintln!("base-import command is not supported.");
+                    eprintln!("base-import subcommand is not supported.");
                 }
             }
             // Base rebuild
             Some(("base-rebuild", _matches)) => {
                 // Run rebuild_base
-                rebuild_base().unwrap();
+                let run = rebuild_base();
+                match run {
+                    Ok(_) => println!("Base snapshot was rebuilt successfully."),
+                    Err(e) => eprintln!("{}", e),
+                }
             }
             // Base update
             Some(("base-update", base_update_matches)) => {
@@ -171,7 +180,11 @@ fn main() {
             // Check update
             Some(("check", _matches)) => {
                 // Run check_update
-                check_update().unwrap();
+                let run = check_update();
+                match run {
+                    Ok(_) => (),
+                    Err(e) => eprintln!("{}", e),
+                }
             }
             // Chroot
             Some(("chroot", chroot_matches)) => {
@@ -348,7 +361,11 @@ fn main() {
                 let desc = desc_matches.get_one::<String>("DESCRIPTION").map(|s| s.as_str()).unwrap().to_string();
 
                 // Run write_desc
-                write_desc(&snapshot, &desc, true).unwrap();
+                let run = write_desc(&snapshot, &desc, true);
+                match run {
+                    Ok(_) => (),
+                    Err(e) => eprintln!("{}", e),
+                }
             }
             // Diff two snapshots
             Some(("diff", diff_matches)) => {
@@ -376,7 +393,11 @@ fn main() {
                 };
 
                 // Run snapshot_config_edit
-                snapshot_config_edit(&snapshot).unwrap();
+                let run = snapshot_config_edit(&snapshot);
+                match run {
+                    Ok(_) => (),
+                    Err(e) => eprintln!("{}", e),
+                }
             }
             // Edit snapshot profile
             Some(("edit-profile", edit_profile_matches)) => {
@@ -452,7 +473,13 @@ fn main() {
                                          .arg("/.snapshots/ash/export")
                                          .status().unwrap();
                 }
-                export(&snapshot, &dest).unwrap();
+
+                // Run export
+                let run = export(&snapshot, &dest);
+                match run {
+                    Ok(_) => (),
+                    Err(e) => eprintln!("{}", e),
+                }
             }
             // Fix db commands
             Some(("fixdb", fixdb_matches)) => {
@@ -468,28 +495,32 @@ fn main() {
 
                 //Run fixdb
                 let run = fixdb(&snapshot);
-                match run {
-                    Ok(_) => {
-                        let snapshot = if snapshot.is_empty() {
-                            get_current_snapshot().to_string()
-                        } else {
-                            snapshot.clone()
-                        };
-                        if post_transactions(&snapshot).is_ok() {
-                            println!("Snapshot {}'s package manager database fixed successfully.", snapshot);
-                        } else {
-                            eprintln!("Fixing package manager database failed.");
-                        }
-                    },
-                    Err(e) => {
-                        let snapshot = if snapshot.is_empty() {
-                            get_current_snapshot().to_string()
-                        } else {
-                            snapshot.clone()
-                        };
-                        chr_delete(&snapshot).unwrap();
-                        eprintln!("{}", e);
-                    },
+                if cfg!(feature = "pacman") {
+                    match run {
+                        Ok(_) => {
+                            let snapshot = if snapshot.is_empty() {
+                                get_current_snapshot().to_string()
+                            } else {
+                                snapshot.clone()
+                            };
+                            if post_transactions(&snapshot).is_ok() {
+                                println!("Snapshot {}'s package manager database fixed successfully.", snapshot);
+                            } else {
+                                eprintln!("Fixing package manager database failed.");
+                            }
+                        },
+                        Err(e) => {
+                            let snapshot = if snapshot.is_empty() {
+                                get_current_snapshot().to_string()
+                            } else {
+                                snapshot.clone()
+                            };
+                            chr_delete(&snapshot).unwrap();
+                            eprintln!("{}", e);
+                        },
+                    }
+                } else {
+                    eprintln!("fixdb subcommand is not supported.");
                 }
             }
             // Switch to Windows (semi plausible deniability)
@@ -575,8 +606,8 @@ fn main() {
                 let tmp_dir = tempfile::TempDir::new_in("/.snapshots/tmp").unwrap();
 
                 // Run import
+                let run = import(snapshot, &path, &desc, &tmp_dir);
                 if cfg!(feature = "import") {
-                    let run = import(snapshot, &path, &desc, &tmp_dir);
                     match run {
                         Ok(_) => {
                             println!("Snapshot {} has been successfully imported.", snapshot);
@@ -593,7 +624,7 @@ fn main() {
                         },
                     }
                 } else {
-                    eprintln!("import command is not supported.");
+                    eprintln!("import subcommand is not supported.");
                 }
             }
             // Install command
@@ -676,7 +707,11 @@ fn main() {
             // Live chroot
             Some(("live-chroot", _matches)) => {
                 // Run live_unlock
-                live_unlock().unwrap();
+                let run = live_unlock();
+                match run {
+                    Ok(_) => (),
+                    Err(e) => eprintln!("{}", e),
+                }
             }
             // New
             Some(("new", new_matches)) => {
@@ -761,7 +796,11 @@ fn main() {
             // Rollback
             Some(("rollback", _matches)) => {
                 // Run rollback
-                rollback().unwrap();
+                let run = rollback();
+                match run {
+                    Ok(_) => (),
+                    Err(e) => eprintln!("{}", e),
+                }
             }
             // Chroot run
             Some(("run", run_matches)) => {
@@ -858,7 +897,11 @@ fn main() {
                 let secondary = tinstall_matches.get_flag("secondary");
 
                 // Run tree_install
-                tree_install(&treename, &pkgs, &profiles, force, &user_profiles, noconfirm, secondary).unwrap();
+                let run = tree_install(&treename, &pkgs, &profiles, force, &user_profiles, noconfirm, secondary);
+                match run {
+                    Ok(_) => (),
+                    Err(e) => eprintln!("{}", e),
+                }
             }
             // tmp (clear tmp)
             Some(("tmp", _matches)) => {
@@ -1021,7 +1064,11 @@ fn main() {
                 };
 
                 // Run snapshot_unlock
-                snapshot_unlock(&snapshot).unwrap();
+                let run = snapshot_unlock(&snapshot);
+                match run {
+                    Ok(_) => (),
+                    Err(e) => eprintln!("{}", e),
+                }
             }
             // Upgrade a snapshot
             Some(("upgrade", upgrade_matches)) => {
@@ -1048,7 +1095,11 @@ fn main() {
             // Ash version
             Some(("version", _matches)) => {
                 // Run ash_version
-                ash_version().unwrap();
+                let run = ash_version();
+                match run {
+                    Ok(_) => (),
+                    Err(e) => eprintln!("{}", e),
+                }
             }
             // Which snapshot(s) contain a package
             Some(("whichsnap", whichsnap_matches)) => {

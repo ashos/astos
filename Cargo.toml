@@ -11,18 +11,17 @@ name = "lib"
 path = "src/lib.rs"
 
 [features]
-default = ["base-import", "btrfs", "grub", "import", "pacman"]
+default = ["base-import", "btrfs", "grub", "import", "apt"]
 apt = []
 base-import = []
-btrfs = []
+btrfs = ["dep:libbtrfs"]
 dnf = []
 grub = []
 import = []
 lock = []
-pacman = []
+pacman = ["dep:users"]
 
 [dependencies]
-cfg-if = "1.0.0"
 chrono = "0.4.31"
 clap = "4.1.8"
 configparser = { version = "3.0.2", features = ["indexmap"] }
@@ -30,13 +29,13 @@ cpython = "0.7"
 csv = "1.2.2"
 ctrlc = "3.4.2"
 curl = "0.4.44"
-libbtrfs = "0.0.12"
+libbtrfs = { version = "0.0.12", optional = true }
 nix = "0.26.2"
 partition-identity = "0.3.0"
 proc-mounts = "0.3.0"
 rustix = "0.38.8"
 tempfile = "3.8.0"
-users = "0.11.0"
+users = { version = "0.11.0", optional = true }
 walkdir = "2.3.3"
 
 [build-dependencies]

@@ -11,7 +11,6 @@ use std::process::{Command, ExitStatus};
 use tempfile::TempDir;
 use users::get_user_by_name;
 use users::os::unix::UserExt;
-use walkdir::WalkDir;
 
 // Check if AUR is setup right
 pub fn aur_check(snapshot: &str) -> bool {
@@ -31,7 +30,8 @@ pub fn aur_check(snapshot: &str) -> bool {
 pub fn auto_upgrade(snapshot: &str) -> Result<(), Error> {
     // Make sure snapshot exists
     if !Path::new(&format!("/.snapshots/rootfs/snapshot-{}", snapshot)).try_exists()? {
-        eprintln!("Cannot upgrade as snapshot {} doesn't exist.", snapshot);
+        return Err(Error::new(
+            ErrorKind::NotFound, format!("Cannot upgrade as snapshot {} doesn't exist.", snapshot)));
 
     } else {
         // Required in virtualbox, otherwise error in package db update
@@ -69,6 +69,8 @@ pub fn auto_upgrade(snapshot: &str) -> Result<(), Error> {
                                                  .open("/.snapshots/ash/upstate")?;
                 let date = Command::new("date").output()?;
                 file.write_all(format!("\n{}", &date.stdout.to_string_lossy().as_str()?).as_bytes())?;
+                return Err(Error::new(ErrorKind::Other,
+                                      "Failed to upgrade."));
             }
         } else {
             // Use paru if aur is enabled
@@ -98,6 +100,8 @@ pub fn auto_upgrade(snapshot: &str) -> Result<(), Error> {
                                                  .open("/.snapshots/ash/upstate")?;
                 let date = Command::new("date").output()?;
                 file.write_all(format!("\n{}", &date.stdout.to_string_lossy().as_str()?).as_bytes())?;
+                return Err(Error::new(ErrorKind::Other,
+                                      "Failed to upgrade."));
             }
         }
     }
@@ -314,7 +318,7 @@ pub fn install_package_helper(snapshot:&str, pkgs: &Vec<String>, noconfirm: bool
                                             .status()?;
             if !excode.success() {
                 return Err(Error::new(ErrorKind::Other,
-                                      format!("Failed to install {}.", pkg)));
+                                      format!("Failed to install {}", pkg)));
             // Add to profile-packages if not system package
             } else if !pkgs_list.contains(pkg) && !is_system_pkg(&profconf, pkg.to_string()) {
                 pkgs_list.push(pkg.to_string());
@@ -338,7 +342,7 @@ pub fn install_package_helper(snapshot:&str, pkgs: &Vec<String>, noconfirm: bool
                 .status()?;
             if !excode.success() {
                 return Err(Error::new(ErrorKind::Other,
-                                      format!("Failed to install {}.", pkg)));
+                                      format!("Failed to install {}", pkg)));
             // Add to profile-packages if not system package
             } else if !pkgs_list.contains(pkg) && !is_system_pkg(&profconf, pkg.to_string()) {
                 pkgs_list.push(pkg.to_string());
@@ -380,7 +384,7 @@ pub fn install_package_helper_chroot(snapshot:&str, pkgs: &Vec<String>, noconfir
                                             .status()?;
             if !excode.success() {
                 return Err(Error::new(ErrorKind::Other,
-                                      format!("Failed to install {}.", pkg)));
+                                      format!("Failed to install {}", pkg)));
             }
         } else if aur_check(snapshot) {
             // Use paru if aur is enabled
@@ -396,7 +400,7 @@ pub fn install_package_helper_chroot(snapshot:&str, pkgs: &Vec<String>, noconfir
                 .status()?;
             if !excode.success() {
                 return Err(Error::new(ErrorKind::Other,
-                                      format!("Failed to install {}.", pkg)));
+                                      format!("Failed to install {}", pkg)));
             }
         } else if !aur_check(snapshot) {
             return Err(Error::new(ErrorKind::NotFound,
@@ -428,7 +432,7 @@ pub fn install_package_helper_live(snapshot: &str, tmp: &str, pkgs: &Vec<String>
                 .status()?;
             if !excode.success() {
                 return Err(Error::new(ErrorKind::Other,
-                                      format!("Failed to install {}.", pkg)));
+                                      format!("Failed to install {}", pkg)));
             }
         } else if aur_check(snapshot) {
             // Use paru if aur is enabled
@@ -444,7 +448,7 @@ pub fn install_package_helper_live(snapshot: &str, tmp: &str, pkgs: &Vec<String>
                 .status()?;
             if !excode.success() {
                 return Err(Error::new(ErrorKind::Other,
-                                      format!("Failed to install {}.", pkg)));
+                                      format!("Failed to install {}", pkg)));
             }
         }
     }
@@ -592,7 +596,7 @@ pub fn service_enable(snapshot: &str, services: &Vec<String>, chr: &str) -> Resu
     Ok(())
 }
 
-// Show diff of packages between 2 snapshots
+// Show difference of packages between 2 snapshots
 pub fn snapshot_diff(snapshot1: &str, snapshot2: &str) -> Result<(), Error> {
     // Make sure snapshot one does exist
     if !Path::new(&format!("/.snapshots/rootfs/snapshot-{}", snapshot1)).try_exists()? {
@@ -605,32 +609,30 @@ pub fn snapshot_diff(snapshot1: &str, snapshot2: &str) -> Result<(), Error> {
                               format!("Snapshot {} not found.", snapshot2)));
 
     } else {
-        let snap1 = format!("/.snapshots/rootfs/snapshot-{}/var/lib/pacman/local", snapshot1);
-        let snap2 = format!("/.snapshots/rootfs/snapshot-{}/var/lib/pacman/local", snapshot2);
-        let path1 = Path::new(&snap1);
-        let path2 = Path::new(&snap2);
-        // Iterate over all directories in dir2 and check if any are missing in dir1
-        let mut missing_dirs = Vec::new();
-        for entry in WalkDir::new(path2) {
-            let entry = entry.unwrap();
-            if entry.file_type().is_dir() {
-                let relative_path = entry.path().strip_prefix(path2).unwrap();
-                let dir1_path = path1.join(relative_path);
+        let snap1_pkgs = pkg_list(snapshot1, "");
+        let snap2_pkgs = pkg_list(snapshot2, "");
 
-                if !dir1_path.exists() {
-                    let dir_name = relative_path.file_name().unwrap();
-                    missing_dirs.push(dir_name.to_string_lossy().to_string());
-                }
+        // Collect the missing packages names
+        let mut missing_pkgs: Vec<String> = Vec::new();
+        for pkg in &snap1_pkgs {
+            if !snap2_pkgs.contains(&pkg) {
+                missing_pkgs.push(format!("{} only in snapshot {}", pkg.to_string(),snapshot1));
+            }
+        }
+        for pkg in &snap2_pkgs {
+            if !snap1_pkgs.contains(&pkg) {
+                missing_pkgs.push(format!("{} only in snapshot {}", pkg.to_string(),snapshot2));
             }
         }
 
-        // Print the missing directory names
-        if !missing_dirs.is_empty() {
-            missing_dirs.sort();
-            for dir_name in missing_dirs {
-                println!("{}", dir_name);
+        // Print the missing packages names
+        if !missing_pkgs.is_empty() {
+            missing_pkgs.sort();
+            for name in missing_pkgs {
+                println!("{}", name);
             }
         }
+
     }
     Ok(())
 }
@@ -668,6 +670,23 @@ pub fn system_config(snapshot: &str, profconf: &Ini) -> Result<(), Error> {
     Command::new("cp").args(["-n", "-r", "--reflink=auto"])
                       .arg(format!("/.snapshots/rootfs/snapshot-{}/boot/grub", snapshot))
                       .arg(format!("/.snapshots/rootfs/snapshot-chr{}/boot/grub", snapshot))
+                      .output()?;
+    #[cfg(feature = "grub")]
+    Command::new("cp").args(["-n", "-r", "--reflink=auto"])
+                      .arg(format!("/.snapshots/rootfs/snapshot-{}/etc/default/grub", snapshot))
+                      .arg(format!("/.snapshots/rootfs/snapshot-chr{}/etc/default/grub", snapshot))
+                      .output()?;
+    #[cfg(feature = "grub")]
+    Command::new("cp").args(["-n", "-r", "--reflink=auto"])
+                      .arg(format!("/.snapshots/rootfs/snapshot-{}/etc/grub.d", snapshot))
+                      .arg(format!("/.snapshots/rootfs/snapshot-chr{}/etc/grub.d", snapshot))
+                      .output()?;
+
+    // Copy /usr/local
+    remove_dir_content(&format!("/.snapshots/rootfs/snapshot-chr{}/usr/local", snapshot))?;
+    Command::new("cp").args(["-n", "-r", "--reflink=auto"])
+                      .arg(format!("/.snapshots/rootfs/snapshot-{}/usr/local/.", snapshot))
+                      .arg(format!("/.snapshots/rootfs/snapshot-chr{}/usr/local/", snapshot))
                       .output()?;
 
     // Install system packages
@@ -745,38 +764,38 @@ pub fn system_config(snapshot: &str, profconf: &Ini) -> Result<(), Error> {
 
 // Sync tree helper function //REVIEW
 pub fn tree_sync_helper(s_f: &str, s_t: &str, chr: &str) -> Result<(), Error>  {
-    DirBuilder::new().recursive(true)
-                     .create("/.snapshots/tmp-db/local/")?;
-    let pkg_list_to = pkg_list(s_t, "chr");
-    let pkg_list_from = pkg_list(s_f, "");
+    //DirBuilder::new().recursive(true)
+                     //.create("/.snapshots/tmp-db/local/")?;
+    //let pkg_list_to = pkg_list(s_t, "chr");
+    //let pkg_list_from = pkg_list(s_f, "");
 
     // Get packages to be inherited
-    let mut pkg_list_new = Vec::new();
-    for j in pkg_list_from {
-        if !pkg_list_to.contains(&j) {
-            pkg_list_new.push(j);
-        }
-    }
-    let pkg_list_from = pkg_list_new;
-    Command::new("cp").arg("-r")
-                      .arg(format!("/.snapshots/rootfs/snapshot-{}{}/var/lib/pacman/local/.", chr,s_t))
-                      .arg("/.snapshots/tmp-db/local/").output()?;
+    //let mut pkg_list_new = Vec::new();
+    //for j in pkg_list_from {
+        //if !pkg_list_to.contains(&j) {
+            //pkg_list_new.push(j);
+        //}
+    //}
+    //let pkg_list_from = pkg_list_new;
+    //Command::new("cp").arg("-r")
+                      //.arg(format!("/.snapshots/rootfs/snapshot-{}{}/var/lib/pacman/local/.", chr,s_t))
+                      //.arg("/.snapshots/tmp-db/local/").output()?;
     Command::new("cp").args(["-n", "-r", "--reflink=auto"])
                       .arg(format!("/.snapshots/rootfs/snapshot-{}/.", s_f))
                       .arg(format!("/.snapshots/rootfs/snapshot-{}{}/", chr,s_t))
                       .output()?;
-    remove_dir_content(&format!("/.snapshots/rootfs/snapshot-{}{}/var/lib/pacman/local", chr,s_t))?;
-    Command::new("cp").arg("-r")
-                      .arg("/.snapshots/tmp-db/local/.")
-                      .arg(format!("/.snapshots/rootfs/snapshot-{}{}/var/lib/pacman/local/", chr,s_t))
-                      .output()?;
-    for entry in pkg_list_from {
-        Command::new("cp").arg("-r")
-                          .arg(format!("/.snapshots/rootfs/snapshot-{}/var/lib/pacman/local/{}-[0-9]*", s_f,entry))
-                          .arg(format!("/.snapshots/rootfs/snapshot-{}{}/var/lib/pacman/local/'", chr,s_t))
-                          .output()?;
-        }
-    remove_dir_content("/.snapshots/tmp-db/local")?;
+    //remove_dir_content(&format!("/.snapshots/rootfs/snapshot-{}{}/var/lib/pacman/local", chr,s_t))?;
+    //Command::new("cp").arg("-r")
+                      //.arg("/.snapshots/tmp-db/local/.")
+                      //.arg(format!("/.snapshots/rootfs/snapshot-{}{}/var/lib/pacman/local/", chr,s_t))
+                      //.output()?;
+    //for entry in pkg_list_from {
+        //Command::new("cp").arg("-r")
+                          //.arg(format!("/.snapshots/rootfs/snapshot-{}/var/lib/pacman/local/{}-[0-9]*", s_f,entry))
+                          //.arg(format!("/.snapshots/rootfs/snapshot-{}{}/var/lib/pacman/local/'", chr,s_t))
+                          //.output()?;
+    //}
+    //remove_dir_content("/.snapshots/tmp-db/local")?;
     Ok(())
 }
 
@@ -812,7 +831,7 @@ pub fn uninstall_package_helper(snapshot: &str, pkgs: &Vec<String>, noconfirm: b
 
             if !excode.success() {
             return Err(Error::new(ErrorKind::Other,
-                                  format!("Failed to uninstall {}.", pkg)));
+                                  format!("Failed to uninstall {}", pkg)));
             } else if pkgs_list.contains(pkg) {
                 profconf.remove_key("profile-packages", &pkg);
                 profconf.pretty_write(&cfile, &write_options)?;
@@ -843,7 +862,7 @@ pub fn uninstall_package_helper_chroot(snapshot: &str, pkgs: &Vec<String>, nocon
 
         if !excode.success() {
             return Err(Error::new(ErrorKind::Other,
-                                  format!("Failed to uninstall {}.", pkg)));
+                                  format!("Failed to uninstall {}", pkg)));
         }
     }
     Ok(())
@@ -864,7 +883,7 @@ pub fn uninstall_package_helper_live(tmp: &str, pkgs: &Vec<String>, noconfirm: b
 
         if !excode.success() {
             return Err(Error::new(ErrorKind::Other,
-                                  format!("Failed to uninstall {}.", pkg)));
+                                  format!("Failed to uninstall {}", pkg)));
         }
     }
     Ok(())
