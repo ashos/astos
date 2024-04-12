@@ -906,7 +906,19 @@ pub fn deploy(snapshot: &str, secondary: bool, reset: bool) -> Result<String, Er
         let tmp = get_tmp();
         if Path::new("/.snapshots/rootfs/snapshot-deploy-rollback").try_exists()? {
             delete_subvolume("/.snapshots/rootfs/snapshot-deploy-rollback")?;
+            delete_subvolume("/.snapshots/boot/boot-deploy-rollback")?;
+            delete_subvolume("/.snapshots/etc/etc-deploy-rollback")?;
+            delete_subvolume("/.snapshots/var/var-deploy-rollback")?;
         }
+        create_snapshot(&format!("/.snapshots/boot/boot-{}", tmp),
+                        "/.snapshots/boot/boot-deploy-rollback",
+                        false)?;
+        create_snapshot(&format!("/.snapshots/etc/etc-{}", tmp),
+                        "/.snapshots/etc/etc-deploy-rollback",
+                        false)?;
+        create_snapshot(&format!("/.snapshots/var/var-{}", tmp),
+                        "/.snapshots/var/var-deploy-rollback",
+                        false)?;
         create_snapshot(&format!("/.snapshots/rootfs/snapshot-{}", tmp),
                         "/.snapshots/rootfs/snapshot-deploy-rollback",
                         false)?;
@@ -917,7 +929,10 @@ pub fn deploy(snapshot: &str, secondary: bool, reset: bool) -> Result<String, Er
         // Set default volume
         #[cfg(feature = "btrfs")]
         btrfs::set_default(&format!("/.snapshots/rootfs/snapshot-{}", tmp))?;
+
+        // Delete old tmp
         tmp_delete(secondary)?;
+        // Get new tmp
         let tmp = get_aux_tmp(tmp, secondary);
 
         // Special mutable directories

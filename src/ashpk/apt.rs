@@ -482,10 +482,12 @@ pub fn system_config(snapshot: &str, profconf: &Ini) -> Result<(), Error> {
                       .arg(format!("/.snapshots/rootfs/snapshot-{}/boot/grub", snapshot))
                       .arg(format!("/.snapshots/rootfs/snapshot-chr{}/boot/grub", snapshot))
                       .output()?;
+    #[cfg(feature = "grub")]
     Command::new("cp").args(["-n", "-r", "--reflink=auto"])
                       .arg(format!("/.snapshots/rootfs/snapshot-{}/etc/default/grub", snapshot))
                       .arg(format!("/.snapshots/rootfs/snapshot-chr{}/etc/default/grub", snapshot))
                       .output()?;
+    #[cfg(feature = "grub")]
     Command::new("cp").args(["-n", "-r", "--reflink=auto"])
                       .arg(format!("/.snapshots/rootfs/snapshot-{}/etc/grub.d", snapshot))
                       .arg(format!("/.snapshots/rootfs/snapshot-chr{}/etc/grub.d", snapshot))
@@ -582,10 +584,10 @@ pub fn tree_sync_helper(s_f: &str, s_t: &str, chr: &str) -> Result<(), Error>  {
     //Command::new("cp").arg("-r")
                       //.arg(format!("/.snapshots/rootfs/snapshot-{}{}/var/lib/dpkg/status", chr,s_t))
                       //.arg("/.snapshots/tmp-db/").output()?;
-    Command::new("cp").args(["-n", "-r", "--reflink=auto"])
-                      .arg(format!("/.snapshots/rootfs/snapshot-{}/.", s_f))
-                      .arg(format!("/.snapshots/rootfs/snapshot-{}{}/", chr,s_t))
-                      .output()?;
+    //Command::new("cp").args(["-n", "-r", "--reflink=auto"])
+                      //.arg(format!("/.snapshots/rootfs/snapshot-{}/.", s_f))
+                      //.arg(format!("/.snapshots/rootfs/snapshot-{}{}/", chr,s_t))
+                      //.output()?;
     //remove_dir_content(&format!("/.snapshots/rootfs/snapshot-{}{}/var/lib/dpkg/status", chr,s_t))?;
     //Command::new("cp").arg("-r")
                       //.arg("/.snapshots/tmp-db/local/.")

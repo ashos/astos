@@ -780,10 +780,10 @@ pub fn tree_sync_helper(s_f: &str, s_t: &str, chr: &str) -> Result<(), Error>  {
     //Command::new("cp").arg("-r")
                       //.arg(format!("/.snapshots/rootfs/snapshot-{}{}/var/lib/pacman/local/.", chr,s_t))
                       //.arg("/.snapshots/tmp-db/local/").output()?;
-    Command::new("cp").args(["-n", "-r", "--reflink=auto"])
-                      .arg(format!("/.snapshots/rootfs/snapshot-{}/.", s_f))
-                      .arg(format!("/.snapshots/rootfs/snapshot-{}{}/", chr,s_t))
-                      .output()?;
+    //Command::new("cp").args(["-n", "-r", "--reflink=auto"])
+                      //.arg(format!("/.snapshots/rootfs/snapshot-{}/.", s_f))
+                      //.arg(format!("/.snapshots/rootfs/snapshot-{}{}/", chr,s_t))
+                      //.output()?;
     //remove_dir_content(&format!("/.snapshots/rootfs/snapshot-{}{}/var/lib/pacman/local", chr,s_t))?;
     //Command::new("cp").arg("-r")
                       //.arg("/.snapshots/tmp-db/local/.")
