@@ -3037,7 +3037,7 @@ pub fn reset() -> Result<(), Error> {
     Ok(())
 }
 
-// Rollback last booted deployment
+// Rollback last booted deployment //REVIEW
 pub fn rollback() -> Result<(), Error> {
     let tmp = "deploy-rollback";
     let i = find_new();
