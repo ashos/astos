@@ -904,24 +904,24 @@ pub fn deploy(snapshot: &str, secondary: bool, reset: bool) -> Result<String, Er
     } else {
         // Create rollback snapshot
         let tmp = get_tmp();
-        if Path::new("/.snapshots/rootfs/snapshot-deploy-rollback").try_exists()? {
-            delete_subvolume("/.snapshots/rootfs/snapshot-deploy-rollback")?;
-            delete_subvolume("/.snapshots/boot/boot-deploy-rollback")?;
-            delete_subvolume("/.snapshots/etc/etc-deploy-rollback")?;
-            delete_subvolume("/.snapshots/var/var-deploy-rollback")?;
+        if Path::new("/.snapshots/rootfs/snapshot-rollback").try_exists()? {
+            delete_subvolume("/.snapshots/rootfs/snapshot-rollback")?;
+            delete_subvolume("/.snapshots/boot/boot-rollback")?;
+            delete_subvolume("/.snapshots/etc/etc-rollback")?;
+            delete_subvolume("/.snapshots/var/var-rollback")?;
         }
         create_snapshot(&format!("/.snapshots/boot/boot-{}", tmp),
-                        "/.snapshots/boot/boot-deploy-rollback",
-                        false)?;
+                        "/.snapshots/boot/boot-rollback",
+                        true)?;
         create_snapshot(&format!("/.snapshots/etc/etc-{}", tmp),
-                        "/.snapshots/etc/etc-deploy-rollback",
-                        false)?;
+                        "/.snapshots/etc/etc-rollback",
+                        true)?;
         create_snapshot(&format!("/.snapshots/var/var-{}", tmp),
-                        "/.snapshots/var/var-deploy-rollback",
-                        false)?;
+                        "/.snapshots/var/var-rollback",
+                        true)?;
         create_snapshot(&format!("/.snapshots/rootfs/snapshot-{}", tmp),
-                        "/.snapshots/rootfs/snapshot-deploy-rollback",
-                        false)?;
+                        "/.snapshots/rootfs/snapshot-rollback",
+                        true)?;
 
         // Update bootloader
         update_boot(snapshot, secondary)?;
@@ -3039,7 +3039,7 @@ pub fn reset() -> Result<(), Error> {
 
 // Rollback last booted deployment //REVIEW
 pub fn rollback() -> Result<(), Error> {
-    let tmp = "deploy-rollback";
+    let tmp = "rollback";
     let i = find_new();
     clone_as_tree(&tmp, "")?;
     write_desc(&i.to_string(), " rollback ", false)?;
