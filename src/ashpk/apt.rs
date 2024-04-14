@@ -1,10 +1,10 @@
-use crate::{check_mutability, chr_delete, chroot_exec, get_current_snapshot, get_tmp,
-            immutability_disable, immutability_enable, is_system_pkg, is_system_locked,
-            post_transactions, prepare, remove_dir_content, sync_time};
+use crate::{check_profile, chr_delete, chroot_exec, get_tmp,
+            is_system_locked, is_system_pkg, post_transactions,
+            prepare, remove_dir_content, sync_time};
 
 use configparser::ini::{Ini, WriteOptions};
 use rustix::path::Arg;
-use std::fs::{DirBuilder, metadata, OpenOptions, read_to_string};
+use std::fs::{metadata, OpenOptions, read_to_string};
 use std::io::{Error, ErrorKind, Write};
 use std::path::Path;
 use std::process::{Command, ExitStatus};
@@ -566,36 +566,17 @@ pub fn system_config(snapshot: &str, profconf: &Ini) -> Result<(), Error> {
     Ok(())
 }
 
-// Sync tree helper function //REVIEW
+// Sync tree helper function
 pub fn tree_sync_helper(s_f: &str, s_t: &str, chr: &str) -> Result<(), Error>  {
-    //DirBuilder::new().recursive(true)
-                     //.create("/.snapshots/tmp-db/")?;
-    //let pkg_list_to = pkg_list(s_t, "chr");
-    //let pkg_list_from = pkg_list(s_f, "");
-
-    // Get packages to be inherited
-    //let mut pkg_list_new = Vec::new();
-    //for j in pkg_list_from {
-        //if !pkg_list_to.contains(&j) {
-            //pkg_list_new.push(j);
-        //}
-    //}
-    //let pkg_list_from = pkg_list_new;
-    //Command::new("cp").arg("-r")
-                      //.arg(format!("/.snapshots/rootfs/snapshot-{}{}/var/lib/dpkg/status", chr,s_t))
-                      //.arg("/.snapshots/tmp-db/").output()?;
-    //Command::new("cp").args(["-n", "-r", "--reflink=auto"])
-                      //.arg(format!("/.snapshots/rootfs/snapshot-{}/.", s_f))
-                      //.arg(format!("/.snapshots/rootfs/snapshot-{}{}/", chr,s_t))
-                      //.output()?;
-    //remove_dir_content(&format!("/.snapshots/rootfs/snapshot-{}{}/var/lib/dpkg/status", chr,s_t))?;
-    //Command::new("cp").arg("-r")
-                      //.arg("/.snapshots/tmp-db/local/.")
-                      //.arg(format!("/.snapshots/rootfs/snapshot-{}{}/var/lib/dpkg/status", chr,s_t))
-                      //.output()?;
-    //for entry in pkg_list_from {
-    //}
-    //remove_dir_content("/.snapshots/tmp-db/local")?;
+    Command::new("cp").args(["-r", "--reflink=auto"])
+                      .arg(format!("/.snapshots/etc/etc-{}/.", s_f))
+                      .arg(format!("/.snapshots/rootfs/snapshot-{}{}/etc", chr,s_t))
+                      .output()?;
+    Command::new("cp").args(["-n", "-r", "--reflink=auto"])
+                      .arg(format!("/.snapshots/rootfs/snapshot-{}/var/cache/apt/archives", s_f))
+                      .arg(format!("/.snapshots/rootfs/snapshot-{}{}/var/cache/apt/archives", chr,s_t))
+                      .output()?;
+    check_profile(s_t)?;
     Ok(())
 }
 

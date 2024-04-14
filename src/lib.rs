@@ -3042,7 +3042,6 @@ pub fn rollback() -> Result<(), Error> {
     let tmp = "rollback";
     let i = find_new();
     clone_as_tree(&tmp, "")?;
-    write_desc(&i.to_string(), " rollback ", false)?;
     deploy(&i.to_string(), false, false)?;
     Ok(())
 }
