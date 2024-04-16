@@ -124,7 +124,7 @@ pub fn bootstrap(snapshot: &str) -> Result<(), Error> {
 
     let paru_install = Command::new("sh")
         .arg("-c")
-        .arg(format!("su aur -c 'paru --dbpath {} -r /.snapshots/rootfs/snapshot-chr{} -Sy --noconfirm --overwrite \"*\" paru'", //TODO replace paru with ash & install git+cargo
+        .arg(format!("su aur -c 'paru --dbpath {} -r /.snapshots/rootfs/snapshot-chr{} -Sy --noconfirm --overwrite \"*\" paru'", //TODO replace paru with ash
                      tmp_db.path().to_str().unwrap(),snapshot)).status()?;
     if !paru_install.success() {
         return Err(Error::new(ErrorKind::Other,
@@ -591,7 +591,7 @@ pub fn service_enable(snapshot: &str, services: &Vec<String>, chr: &str) -> Resu
                 return Err(Error::new(ErrorKind::Other,
                                       format!("Failed to enable {}.", service)));
             }
-        } //TODO add OspenRC
+        } //TODO add OpenRC
     }
     Ok(())
 }
