@@ -1,5 +1,5 @@
 extern crate lib;
-mod btrfs;
+pub mod btrfs;
 mod cli;
 
 use cli::*;
@@ -12,7 +12,7 @@ use std::process::Command;
 
 // Select Bootloader
 #[cfg(feature = "grub")]
-mod grub;
+pub mod grub;
 #[cfg(feature = "grub")]
 use grub::update_boot;
 //TODO add systemd-boot
@@ -843,10 +843,9 @@ fn main() {
 
                 // Optional values
                 let live = sync_matches.get_flag("live");
-                let force_offline = sync_matches.get_flag("force");
 
                 // Run tree_sync
-                let run = tree_sync(&treename, force_offline, live);
+                let run = tree_sync(&treename, live);
                 match run {
                     Ok(_) => println!("Tree {} synced.", treename),
                     Err(e) => eprintln!("{}", e),

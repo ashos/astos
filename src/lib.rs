@@ -33,7 +33,7 @@ mod zfs;
 #[cfg(feature = "zfs")] //TODO
 use zfs::*;
 
-//  Select bootloader
+// Select bootloader
 #[cfg(feature = "grub")]
 mod grub;
 #[cfg(feature = "grub")]
@@ -912,16 +912,17 @@ pub fn deploy(snapshot: &str, secondary: bool, reset: bool) -> Result<String, Er
         }
         create_snapshot(&format!("/.snapshots/boot/boot-{}", tmp),
                         "/.snapshots/boot/boot-rollback",
-                        true)?;
+                        false)?;
         create_snapshot(&format!("/.snapshots/etc/etc-{}", tmp),
                         "/.snapshots/etc/etc-rollback",
-                        true)?;
+                        false)?;
         create_snapshot(&format!("/.snapshots/var/var-{}", tmp),
                         "/.snapshots/var/var-rollback",
-                        true)?;
+                        false)?;
         create_snapshot(&format!("/.snapshots/rootfs/snapshot-{}", tmp),
                         "/.snapshots/rootfs/snapshot-rollback",
-                        true)?;
+                        false)?;
+        remove_dir_content("/.snapshots/rootfs/snapshot-rollback/var/tmp")?;
 
         // Update bootloader
         update_boot(snapshot, secondary)?;
@@ -3037,7 +3038,7 @@ pub fn reset() -> Result<(), Error> {
     Ok(())
 }
 
-// Rollback last booted deployment //REVIEW
+// Rollback last booted deployment //REVIEW => display manager on debian is issue
 pub fn rollback() -> Result<(), Error> {
     let tmp = "rollback";
     let i = find_new();
@@ -3176,6 +3177,47 @@ pub fn snapshot_config_get(snapshot: &str) -> HashMap<String, String> {
         }
         return options;
     }
+}
+
+// Show diff of packages between 2 snapshots
+pub fn snapshot_diff(snapshot1: &str, snapshot2: &str) -> Result<(), Error> {
+    // Make sure snapshot one does exist
+    if !Path::new(&format!("/.snapshots/rootfs/snapshot-{}", snapshot1)).try_exists()? {
+        return Err(Error::new(ErrorKind::NotFound,
+                              format!("Snapshot {} not found.", snapshot1)));
+
+        // Make sure snapshot two does exist
+        } else if !Path::new(&format!("/.snapshots/rootfs/snapshot-{}", snapshot2)).try_exists()? {
+        return Err(Error::new(ErrorKind::NotFound,
+                              format!("Snapshot {} not found.", snapshot2)));
+
+    } else {
+        let snap1_pkgs = pkg_list(snapshot1, "");
+        let snap2_pkgs = pkg_list(snapshot2, "");
+
+        // Collect the missing packages names
+        let mut missing_pkgs: Vec<String> = Vec::new();
+        for pkg in &snap1_pkgs {
+            if !snap2_pkgs.contains(&pkg) {
+                missing_pkgs.push(format!("{} only in snapshot {}", pkg.to_string(),snapshot1));
+            }
+        }
+        for pkg in &snap2_pkgs {
+            if !snap1_pkgs.contains(&pkg) {
+                missing_pkgs.push(format!("{} only in snapshot {}", pkg.to_string(),snapshot2));
+            }
+        }
+
+        // Print the missing packages names
+        if !missing_pkgs.is_empty() {
+            missing_pkgs.sort();
+            for name in missing_pkgs {
+                println!("{}", name);
+            }
+        }
+
+    }
+    Ok(())
 }
 
 // Edit per-snapshot profile
@@ -3603,7 +3645,7 @@ pub fn tree_show() {
 }
 
 // Sync tree and all its snapshots
-pub fn tree_sync(treename: &str, force_offline: bool, live: bool) -> Result<(), Error> {
+pub fn tree_sync(treename: &str, live: bool) -> Result<(), Error> {
     if !Path::new(&format!("/.snapshots/rootfs/snapshot-{}", treename)).try_exists()? {
         return Err(Error::new(ErrorKind::NotFound,
                               format!("Cannot sync as tree {} doesn't exist.", treename)));
@@ -3614,12 +3656,10 @@ pub fn tree_sync(treename: &str, force_offline: bool, live: bool) -> Result<(), 
                               format!("Snapshot {} appears to be in use. If you're certain it's not in use, clear lock with 'ash unlock -s {}.",
                                       treename,treename)));
     } else {
-        // Syncing tree automatically updates it, unless 'force-sync' is used
-        if !force_offline {
-            if tree_upgrade(treename).is_err() {
-                return Err(Error::new(ErrorKind::Other,
-                                      format!("Failed to upgrade tree {}.", treename)));
-            }
+        // Syncing tree automatically updates it
+        if tree_upgrade(treename).is_err() {
+            return Err(Error::new(ErrorKind::Other,
+                                  format!("Failed to upgrade tree {}.", treename)));
         }
 
         // Import tree file

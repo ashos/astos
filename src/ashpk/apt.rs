@@ -87,12 +87,12 @@ pub fn cache_copy(snapshot: &str, prepare: bool) -> Result<(), Error> {
     let tmp = get_tmp();
     if prepare {
         Command::new("cp").args(["-n", "-r", "--reflink=auto"])
-                          .arg(format!("/.snapshots/rootfs/snapshot-{}/var/cache/apt/archives", snapshot))
+                          .arg(format!("/.snapshots/rootfs/snapshot-{}/var/cache/apt/archives/.", snapshot))
                           .arg(format!("/.snapshots/rootfs/snapshot-chr{}/var/cache/apt/archives", tmp))
                           .output().unwrap();
     } else {
         Command::new("cp").args(["-n", "-r", "--reflink=auto"])
-                          .arg(format!("/.snapshots/rootfs/snapshot-chr{}/var/cache/apt/archives", snapshot))
+                          .arg(format!("/.snapshots/rootfs/snapshot-chr{}/var/cache/apt/archives/.", snapshot))
                           .arg(format!("/.snapshots/rootfs/snapshot-{}/var/cache/apt/archives", tmp))
                           .output().unwrap();
     }
@@ -385,50 +385,9 @@ pub fn service_enable(snapshot: &str, services: &Vec<String>, chr: &str) -> Resu
     Ok(())
 }
 
-// Show difference of packages between 2 snapshots
-pub fn snapshot_diff(snapshot1: &str, snapshot2: &str) -> Result<(), Error> {
-    // Make sure snapshot one does exist
-    if !Path::new(&format!("/.snapshots/rootfs/snapshot-{}", snapshot1)).try_exists()? {
-        return Err(Error::new(ErrorKind::NotFound,
-                              format!("Snapshot {} not found.", snapshot1)));
-
-        // Make sure snapshot two does exist
-        } else if !Path::new(&format!("/.snapshots/rootfs/snapshot-{}", snapshot2)).try_exists()? {
-        return Err(Error::new(ErrorKind::NotFound,
-                              format!("Snapshot {} not found.", snapshot2)));
-
-    } else {
-        let snap1_pkgs = pkg_list(snapshot1, "");
-        let snap2_pkgs = pkg_list(snapshot2, "");
-
-        // Collect the missing packages names
-        let mut missing_pkgs: Vec<String> = Vec::new();
-        for pkg in &snap1_pkgs {
-            if !snap2_pkgs.contains(&pkg) {
-                missing_pkgs.push(format!("{} only in snapshot {}", pkg.to_string(),snapshot1));
-            }
-        }
-        for pkg in &snap2_pkgs {
-            if !snap1_pkgs.contains(&pkg) {
-                missing_pkgs.push(format!("{} only in snapshot {}", pkg.to_string(),snapshot2));
-            }
-        }
-
-        // Print the missing packages names
-        if !missing_pkgs.is_empty() {
-            missing_pkgs.sort();
-            for name in missing_pkgs {
-                println!("{}", name);
-            }
-        }
-
-    }
-    Ok(())
-}
-
 // Copy system configurations to new snapshot
 pub fn system_config(snapshot: &str, profconf: &Ini) -> Result<(), Error> {
-    //Copy [fstab, time ,localization, network configuration, users and groups, grub]
+    // Copy [fstab, time ,localization, network configuration, users and groups]
     let files = vec!["/etc/fstab", "/etc/localtime", "/etc/adjtime", "/etc/locale.gen", "/etc/locale.conf",
                      "/etc/vconsole.conf", "/etc/hostname", "/etc/shadow", "/etc/passwd", "/etc/gshadow",
                      "/etc/group", "/etc/sudoers"];
@@ -573,7 +532,7 @@ pub fn tree_sync_helper(s_f: &str, s_t: &str, chr: &str) -> Result<(), Error>  {
                       .arg(format!("/.snapshots/rootfs/snapshot-{}{}/etc", chr,s_t))
                       .output()?;
     Command::new("cp").args(["-n", "-r", "--reflink=auto"])
-                      .arg(format!("/.snapshots/rootfs/snapshot-{}/var/cache/apt/archives", s_f))
+                      .arg(format!("/.snapshots/rootfs/snapshot-{}/var/cache/apt/archives/.", s_f))
                       .arg(format!("/.snapshots/rootfs/snapshot-{}{}/var/cache/apt/archives", chr,s_t))
                       .output()?;
     check_profile(s_t)?;
