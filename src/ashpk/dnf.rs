@@ -188,7 +188,7 @@ pub fn install_package_helper_chroot(snapshot:&str, pkgs: &Vec<String>, noconfir
 }
 
 // Install atomic-operation in live snapshot
-pub fn install_package_helper_live(snapshot: &str, tmp: &str, pkgs: &Vec<String>, noconfirm: bool) -> Result<(), Error> {
+pub fn install_package_helper_live(_snapshot: &str, tmp: &str, pkgs: &Vec<String>, noconfirm: bool) -> Result<(), Error> {
     for pkg in pkgs {
         let install_args = if noconfirm {
             format!("dnf install -y --setopt install_weak_deps=False --refresh {}", pkg)

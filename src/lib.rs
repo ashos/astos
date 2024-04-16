@@ -1378,9 +1378,9 @@ pub fn find_new() -> i32 {
 }
 
 // FixDB
-pub fn fixdb(snapshot: &str) -> Result<(), Error> {
+pub fn fixdb(_snapshot: &str) -> Result<(), Error> {
     #[cfg(feature = "pacman")]
-    fix_package_db(snapshot)?;
+    fix_package_db(_snapshot)?;
     Ok(())
 }
 
