@@ -25,7 +25,6 @@ use grub::update_boot;
 // *-deploy[-aux]-secondary          : temporary directories used to boot secondary deployed snapshot
 // *-recovery-deploy[-aux]           : temporary directories used to boot deployed recovery snapshot
 // /.snapshots/ash/deploy-tmp        : deployed snapshots temporary boot directories
-// /.snapshots/ash/ash-{distro_name} : ash binary file location
 // /.snapshots/ash/export            : default export path
 // /.snapshots/ash/part              : root partition uuid
 // /.snapshots/ash/snapshots/*-desc  : snapshots descriptions
@@ -37,7 +36,7 @@ use grub::update_boot;
 // /.snapshots/tmp                   : temporary directory
 // /etc/ash/ash.conf                 : configuration file for ash
 // /etc/ash/profile                  : snapshot profile
-// /usr/sbin/ash                     : symlink to /.snapshots/ash/ash
+// /usr/sbin/ash                     : ash binary file location
 // /usr/share/ash                    : files that store current snapshot info
 // /use/share/ash/profiles           : default desktop environments profiles path
 // /use/share/ash/rec-tmp            : name of temporary directory used to boot recovery snapshot

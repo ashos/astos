@@ -29,16 +29,20 @@ pub fn delete_old_grub_files(grub: &str) -> Result<(), Error> {
 }
 
 // Get Grub path
-fn get_grub() -> Option<String> {
-    let boot_dir = "/boot";
+fn get_grub(snapshot: &str) -> Option<String> {
+    let boot_dir = format!("/.snapshots/boot/boot-{}", snapshot);
     let grub_dirs: Vec<String> = WalkDir::new(boot_dir)
         .into_iter()
         .filter_map(|entry| {
             let entry: DirEntry = entry.unwrap();
             if entry.file_type().is_dir() {
                 if let Some(dir_path) = entry.path().file_name() {
-                    if dir_path == "grub" {
-                        return Some(entry.path().strip_prefix("/boot/").unwrap().to_string_lossy().into_owned());
+                    if dir_path == "grub" || dir_path == "grub2" {
+                        return Some(entry.path()
+                                    .strip_prefix(format!("/.snapshots/boot/boot-{}", snapshot))
+                                    .unwrap()
+                                    .to_string_lossy()
+                                    .into_owned());
                     }
                 }
             }
@@ -49,8 +53,8 @@ fn get_grub() -> Option<String> {
 }
 
 // Switch between /recovery-tmp deployments
-pub fn switch_recovery_tmp() -> Result<(), Error> {
-    let grub = get_grub().unwrap();
+pub fn switch_recovery_tmp(snapshot: &str, target_snapshot: &str) -> Result<(), Error> {
+    let grub = get_grub(snapshot).unwrap();
     let part = get_part();
     let tmp_boot = TempDir::new_in("/.snapshots/tmp")?;
 
@@ -65,7 +69,8 @@ pub fn switch_recovery_tmp() -> Result<(), Error> {
     let boot_location = tmp_boot.path().to_str().unwrap();
 
     // Read the contents of the file into a string
-    let grub_cfg = format!("{}/{}/grub.cfg", boot_location, grub);
+    let target_grub = get_grub(target_snapshot).unwrap();
+    let grub_cfg = format!("{}/{}/grub.cfg", boot_location, target_grub);
     let src_file_path = format!("/.snapshots/rootfs/snapshot-{}/boot/{}/grub.cfg", source_dep,grub);
     let sfile = if Path::new(&src_file_path).is_file() {
         File::open(&src_file_path)?
@@ -162,8 +167,8 @@ pub fn switch_recovery_tmp() -> Result<(), Error> {
 }
 
 // Switch between /tmp deployments
-pub fn switch_tmp(secondary: bool, reset: bool) -> Result<String, Error> {
-    let grub = get_grub().unwrap();
+pub fn switch_tmp(snapshot: &str, secondary: bool, reset: bool) -> Result<String, Error> {
+    let grub = get_grub(snapshot).unwrap();
     let part = get_part();
     let rec_tmp = get_recovery_tmp();
     let tmp_boot = TempDir::new_in("/.snapshots/tmp")?;
@@ -175,9 +180,10 @@ pub fn switch_tmp(secondary: bool, reset: bool) -> Result<String, Error> {
 
     // Swap deployment subvolumes: deploy <-> deploy-aux
     let source_dep = get_tmp();
+    let source_grub = get_grub(&source_dep).unwrap();
     let target_dep = get_aux_tmp(source_dep.to_string(), secondary);
     Command::new("cp").args(["-r", "--reflink=auto"])
-                      .arg(format!("/.snapshots/rootfs/snapshot-{}/boot/grub", target_dep))
+                      .arg(format!("/.snapshots/rootfs/snapshot-{}/boot/{}", target_dep,grub))
                       .arg(format!("{}", tmp_boot.path().to_str().unwrap()))
                       .output()?;
 
@@ -204,7 +210,7 @@ pub fn switch_tmp(secondary: bool, reset: bool) -> Result<String, Error> {
         for boot_location in [&tmp_boot.path().to_str().unwrap()] {
             // Get old grub configurations
             let grub_path = format!("{}/{}/grub.cfg", boot_location, grub);
-            let src_file_path = format!("/.snapshots/rootfs/snapshot-{}/boot/{}/grub.cfg", source_dep,grub);
+            let src_file_path = format!("/.snapshots/rootfs/snapshot-{}/boot/{}/grub.cfg", source_dep,source_grub);
             let sfile = File::open(&src_file_path)?;
             let reader = BufReader::new(sfile);
             let mut gconf = String::new();
@@ -266,11 +272,20 @@ pub fn switch_tmp(secondary: bool, reset: bool) -> Result<String, Error> {
                 // Write the modified content back to the file
                 file.write_all(format!("\n\n{}", &gconf).as_bytes())?;
             } else {
-                deploy_recovery()?;
+                deploy_recovery(snapshot)?;
             }
         }
     } else {
-        deploy_recovery()?;
+        deploy_recovery(snapshot)?;
+    }
+
+    // Switch grub.cfg
+    if grub == "grub" {
+        copy(format!("{}/{}/grub.cfg", &tmp_boot.path().to_str().unwrap(), grub),
+             format!("{}/grub2/grub.cfg", &tmp_boot.path().to_str().unwrap()))?;
+    } else {
+        copy(format!("{}/{}/grub.cfg", &tmp_boot.path().to_str().unwrap(), grub),
+             format!("{}/grub/grub.cfg", &tmp_boot.path().to_str().unwrap()))?;
     }
 
     // Umount boot partition
@@ -283,7 +298,7 @@ pub fn switch_tmp(secondary: bool, reset: bool) -> Result<String, Error> {
 // Update boot
 pub fn update_boot(snapshot: &str, secondary: bool) -> Result<(), Error> {
     // Path to grub directory
-    let grub = get_grub().unwrap();
+    let grub = get_grub(snapshot).unwrap();
 
     // Make sure snapshot does exist
     if !Path::new(&format!("/.snapshots/rootfs/snapshot-{}", snapshot)).try_exists()? {
@@ -325,7 +340,11 @@ pub fn update_boot(snapshot: &str, secondary: bool) -> Result<(), Error> {
 
         // Run update commands in chroot
         let distro_name = detect_distro::distro_name(snapshot);
-        let mkconfig = format!("/usr/sbin/grub-mkconfig {} -o /boot/{}/grub.cfg", part,grub);
+        let mkconfig = if Path::new(&format!("/.snapshots/rootfs/snapshot-chr{}/usr/sbin/grub2-mkconfig", snapshot)).try_exists()? {
+            format!("/usr/sbin/grub2-mkconfig {} -o /boot/{}/grub.cfg", part,grub)
+        } else {
+            format!("/usr/sbin/grub-mkconfig {} -o /boot/{}/grub.cfg", part,grub)
+        };
         let sed_snap = format!("sed -i 's|snapshot-chr{}|snapshot-{}|g' /boot/{}/grub.cfg", snapshot,tmp,grub);
         let sed_distro = format!("sed -i '0,\\|{}| s||{} snapshot {}|' /boot/{}/grub.cfg",
                                  distro_name,distro_name,snapshot,grub);

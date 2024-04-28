@@ -118,8 +118,11 @@ pub fn ash_mounts(i: &str, chr: &str) -> nix::Result<()> {
     }
 
     // Mount /etc/resolv.conf
-    mount(Some("/etc/resolv.conf"), format!("{}/etc/resolv.conf", snapshot_path).as_str(),
-          Some(file_system), MsFlags::MS_BIND | MsFlags::MS_SLAVE, None::<&str>)?;
+    // Fedora links file to /run/systemd/resolve/reslov.conf
+    if Path::new(&format!("{}/etc/resolv.conf", snapshot_path)).try_exists().unwrap() {
+        mount(Some("/etc/resolv.conf"), format!("{}/etc/resolv.conf", snapshot_path).as_str(),
+              Some(file_system), MsFlags::MS_BIND | MsFlags::MS_SLAVE, None::<&str>)?;
+    }
 
     Ok(())
 }
@@ -130,8 +133,10 @@ pub fn ash_umounts(i: &str, chr: &str) -> nix::Result<()> {
 
     // Unmount in reverse order
     // Unmount /etc/resolv.conf
-    umount2(Path::new(&format!("{}/etc/resolv.conf", snapshot_path)),
-            MntFlags::empty())?;
+    if Path::new(&format!("{}/etc/resolv.conf", snapshot_path)).try_exists().unwrap() {
+        umount2(Path::new(&format!("{}/etc/resolv.conf", snapshot_path)),
+                MntFlags::empty())?;
+    }
 
     // Check EFI
     if is_efi() {
@@ -901,6 +906,14 @@ pub fn deploy(snapshot: &str, secondary: bool, reset: bool) -> Result<String, Er
     if !Path::new(&format!("/.snapshots/rootfs/snapshot-{}", snapshot)).try_exists()? {
         return Err(Error::new(ErrorKind::NotFound, format!("Cannot deploy as snapshot {} doesn't exist.", snapshot)));
 
+    } else if Path::new(&format!("/.snapshots/rootfs/snapshot-chr{}", snapshot)).try_exists()? {
+        // Make sure snapshot is not in use by another ash process
+        return Err(
+            Error::new(
+                ErrorKind::Unsupported,
+                format!("Snapshot {} appears to be in use. If you're certain it's not in use, clear lock with 'ash unlock -s {}'.",
+                        snapshot,snapshot)));
+
     } else {
         // Create rollback snapshot
         let tmp = get_tmp();
@@ -1048,7 +1061,7 @@ pub fn deploy(snapshot: &str, secondary: bool, reset: bool) -> Result<String, Er
                                               .write(true)
                                               .open(format!("/.snapshots/rootfs/snapshot-{}/usr/share/ash/snap", tmp))?;
         snap_file.write_all(snap_num.as_bytes())?;
-        let target_dep = switch_tmp(secondary, reset)?;
+        let target_dep = switch_tmp(snapshot, secondary, reset)?;
 
         // Set default volume
         #[cfg(feature = "btrfs")]
@@ -1059,7 +1072,7 @@ pub fn deploy(snapshot: &str, secondary: bool, reset: bool) -> Result<String, Er
 }
 
 // Deploy recovery snapshot
-pub fn deploy_recovery() -> Result<(), Error> {
+pub fn deploy_recovery(snapshot: &str) -> Result<(), Error> {
     let tmp = get_recovery_tmp();
 
     // Update boot
@@ -1220,7 +1233,7 @@ pub fn deploy_recovery() -> Result<(), Error> {
     snap_file.write_all(snap_num.as_bytes())?;
 
     // Update recovery tmp
-    switch_recovery_tmp()?;
+    switch_recovery_tmp(&snap_num, snapshot)?;
     prepare("0")?;
     let mut recovery_tmp = OpenOptions::new().truncate(true)
                                              .create(true)
@@ -4037,7 +4050,7 @@ pub fn upgrade(snapshot:  &str, baseup: bool, noconfirm: bool) -> Result<(), Err
         if excode.is_ok() {
             if post_transactions(snapshot).is_ok() {
                 if baseup {
-                    if deploy_recovery().is_err() {
+                    if deploy_recovery(snapshot).is_err() {
                         return Err(Error::new(ErrorKind::Other,
                                               format!("Failed to deploy recovery snapshot.")));
                     }
