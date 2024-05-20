@@ -1,6 +1,8 @@
 use crate::get_current_snapshot;
 
-use cpython::{NoArgs, ObjectProtocol, PyDict, PyErr, PyObject, Python};
+use pyo3::prelude::*;
+use pyo3::types::{PyDict, PyTuple};
+use pyo3::{PyErr, PyObject};
 use std::fs::{File, OpenOptions, read_to_string};
 use std::io::{BufRead, BufReader, Write};
 use std::path::Path;
@@ -8,136 +10,142 @@ use std::path::Path;
 
 // Clone within node
 pub fn add_node_to_level(tree: &PyObject, id: &str, val: i32) -> Result<PyObject, PyErr> {
-    let gil = Python::acquire_gil();
-    let py = gil.python();
-    let npar = get_parent(&tree, id)?;
-    let npar_dict = PyDict::new(py);
-    npar_dict.set_item(py, "npar", npar)?;
+    Python::with_gil(|py| {
+        // Get parent
+        let npar = get_parent(&tree, id)?;
+        let npar_dict = PyDict::new_bound(py);
+        npar_dict.set_item("npar", npar)?;
 
-    // Import anytree
-    let anytree =  py.import("anytree")?;
+        // Import anytree
+        let anytree =  py.import_bound("anytree")?;
 
-    // Filter as kwarg
-    let filter = py.eval("lambda node: ('x'+str(node.name)+'x') in ('x'+str(npar)+'x')", Some(&npar_dict), None)?;
-    let filter_ = PyDict::new(py);
-    filter_.set_item(py, "filter_", filter)?;
+        // Filter as kwarg
+        let filter = py.eval_bound("lambda node: ('x'+str(node.name)+'x') in ('x'+str(npar)+'x')", Some(&npar_dict), None)?;
+        let filter_ = PyDict::new_bound(py);
+        filter_.set_item("filter_", filter)?;
 
-    // Parent value
-    let par = anytree.call(py, "find", (tree,), Some(&filter_))?;
+        // Parent value
+        let par = anytree.call_method("find", (tree,), Some(&filter_))?;
 
-    // Parent as kwarg
-    let parent = PyDict::new(py) ;
-    parent.set_item(py, "parent", par)?;
+        // Parent as kwarg
+        let parent = PyDict::new_bound(py) ;
+        parent.set_item("parent", par)?;
 
-    // Node value
-    let node = anytree.call(py, "Node", (val,), Some(&parent));
-    node
+        // Node value
+        let node: PyObject = anytree.call_method("Node", (val,), Some(&parent))?.extract()?;
+
+        Ok(node)
+    })
 }
-
 // Add child to node
 pub fn add_node_to_parent(tree: &PyObject, id: &str, val: i32) -> Result<PyObject, PyErr> {
-    let gil = Python::acquire_gil();
-    let py = gil.python();
-    let id_dict = PyDict::new(py);
-    id_dict.set_item(py, "id", id)?;
+    Python::with_gil(|py| {
+        // Set id
+        let id_dict = PyDict::new_bound(py);
+        id_dict.set_item("id", id)?;
 
-    // Import anytree
-    let anytree =  py.import("anytree")?;
+        // Import anytree
+        let anytree =  py.import_bound("anytree")?;
 
-    // Filter as kwarg
-    let filter = py.eval("lambda node: ('x'+str(node.name)+'x') in ('x'+str(id)+'x')", Some(&id_dict), None)?;
-    let filter_ = PyDict::new(py);
-    filter_.set_item(py, "filter_", filter)?;
+        // Filter as kwarg
+        let filter = py.eval_bound("lambda node: ('x'+str(node.name)+'x') in ('x'+str(id)+'x')", Some(&id_dict), None)?;
+        let filter_ = PyDict::new_bound(py);
+        filter_.set_item("filter_", filter)?;
 
-    // Parent value
-    let par = anytree.call(py, "find", (tree,), Some(&filter_))?;
+        // Parent value
+        let par = anytree.call_method("find", (tree,), Some(&filter_))?;
 
-    // Parent as kwarg
-    let parent = PyDict::new(py) ;
-    parent.set_item(py, "parent", par)?;
+        // Parent as kwarg
+        let parent = PyDict::new_bound(py) ;
+        parent.set_item("parent", par)?;
 
-    // Node value
-    let node = anytree.call(py, "Node", (val,), Some(&parent));
-    node
+        // Node value
+        let node: PyObject = anytree.call_method("Node", (val,), Some(&parent))?.extract()?;
+
+        Ok(node)
+    })
 }
 
 // Add to root tree
 pub fn append_base_tree(tree: &PyObject, val: i32) -> Result<PyObject, PyErr> {
-    let gil = Python::acquire_gil();
-    let py = gil.python();
+    Python::with_gil(|py| {
+        // Import anytree
+        let anytree =  py.import_bound("anytree")?;
 
-    // Import anytree
-    let anytree =  py.import("anytree")?;
+        // Parent as kwarg
+        let parent = PyDict::new_bound(py) ;
+        parent.set_item("parent", tree.getattr(py, "root")?)?;
 
-    // Parent as kwarg
-    let parent = PyDict::new(py) ;
-    parent.set_item(py, "parent", tree.getattr(py, "root").unwrap())?;
+        let node: PyObject = anytree.call_method("Node", (val,), Some(&parent))?.extract()?;
 
-    let node = anytree.call(py, "Node", (val,), Some(&parent));
-    node
+        Ok(node)
+    })
 }
 
 // Import fstree file
 pub fn fstree() -> Result<PyObject, PyErr> {
-    let gil = Python::acquire_gil();
-    let py = gil.python();
+    Python::with_gil(|py| {
+        // Import DictImporter and call import_ function
+        let importer = py.import_bound("anytree.importer")?;
+        let dict_importer = importer.getattr("DictImporter")?;
+        let importer_instance = dict_importer.call(PyTuple::empty_bound(py), None)?;
 
-    // Import DictImporter and call import_ function
-    let importer = py.import("anytree.importer")?;
-    let dict_importer = importer.get(py, "DictImporter")?;
-    let importer_instance = dict_importer.call(py, NoArgs, None)?;
+        // Import tree file
+        let tree_file = import_tree_file("/.snapshots/ash/fstree")?;
 
-    // Import tree file
-    let tree_file = import_tree_file("/.snapshots/ash/fstree")?;
+        // Call import_ function with tree_file argument
+        let fstree: PyObject = importer_instance.call_method("import_", (tree_file,), None)?.extract()?;
 
-    // Call import_ function with tree_file argument
-    let fstree = importer_instance.call_method(py, "import_", (tree_file,), None);
-    fstree
+        Ok(fstree)
+    })
 }
 
 // Get parent
 pub fn get_parent(tree: &PyObject, id: &str) -> Result<PyObject, PyErr> {
-    let gil = Python::acquire_gil();
-    let py = gil.python();
-    let id_dict = PyDict::new(py);
-    id_dict.set_item(py, "id", id)?;
+    Python::with_gil(|py| {
+        // Set id
+        let id_dict = PyDict::new_bound(py);
+        id_dict.set_item("id", id)?;
 
-    // Import anytree
-    let anytree =  py.import("anytree")?;
+        // Import anytree
+        let anytree =  py.import_bound("anytree")?;
 
-    // Filter as kwarg
-    let filter = py.eval("lambda node: ('x'+str(node.name)+'x') in ('x'+str(id)+'x')", Some(&id_dict), None)?;
-    let filter_ = PyDict::new(py);
-    filter_.set_item(py, "filter_", filter)?;
+        // Filter as kwarg
+        let filter = py.eval_bound("lambda node: ('x'+str(node.name)+'x') in ('x'+str(id)+'x')", Some(&id_dict), None)?;
+        let filter_ = PyDict::new_bound(py);
+        filter_.set_item("filter_", filter)?;
 
-    // Parent value
-    let par = anytree.call(py, "find", (tree,), Some(&filter_)).unwrap();
-    par.getattr(py, "parent").unwrap().getattr(py, "name")
+        // Parent value
+        let anytree_call = anytree.call_method("find", (tree,), Some(&filter_))?;
+        let par: PyObject = anytree_call.getattr("parent")?.getattr("name")?.extract()?;
+
+        Ok(par)
+    })
 }
 
 // Import filesystem tree file
-fn import_tree_file(treename: &str) -> Result<cpython::PyObject, cpython::PyErr> {
-    let gil = Python::acquire_gil();
-    let py = gil.python();
+fn import_tree_file(treename: &str) -> Result<PyObject, PyErr> {
+    Python::with_gil(|py| {
+        // Import ast python module
+        let ast = py.import_bound("ast")?;
 
-    // Import ast python module
-    let ast = py.import("ast")?;
+        // Read first line in tree file
+        let treefile = File::open(treename)?;
+        let buf_read = BufReader::new(treefile);
+        let mut read = buf_read.lines();
+        let treefile_readline = read.next().unwrap()?;
 
-    // Read first line in tree file
-    let treefile = File::open(treename).unwrap();
-    let buf_read = BufReader::new(treefile);
-    let mut read = buf_read.lines();
-    let treefile_readline = read.next().unwrap().unwrap();
+        // Use literal_eval from ast
+        let tree_file: PyObject = ast.getattr("literal_eval")?.call((treefile_readline,), None)?.extract()?;
 
-    // Use literal_eval from ast
-    let tree_file = ast.get(py, "literal_eval")?.call(py, (treefile_readline,), None);
-    tree_file
+        Ok(tree_file)
+    })
 }
 
 // Return order to recurse tree
 pub fn recurse_tree(tree: &PyObject, cid: &str) -> Vec<String> {
     let mut order: Vec<String> = Vec::new();
-    for child in return_children(&tree, cid) {
+    for child in return_children(&tree, cid).unwrap() {
         let par = get_parent(&tree, &child).unwrap().to_string();
         if child != cid {
             order.push(par);
@@ -149,124 +157,126 @@ pub fn recurse_tree(tree: &PyObject, cid: &str) -> Vec<String> {
 
 // Remove node from tree
 pub fn remove_node(tree: &PyObject, id: &str) -> Result<PyObject, PyErr> {
-    let gil = Python::acquire_gil();
-    let py = gil.python();
-    let id_dict = PyDict::new(py);
-    id_dict.set_item(py, "id", id).unwrap();
+    Python::with_gil(|py| {
+        // Set id
+        let id_dict = PyDict::new_bound(py);
+        id_dict.set_item("id", id)?;
 
-    // Import anytree
-    let anytree =  py.import("anytree")?;
+        // Import anytree
+        let anytree =  py.import_bound("anytree")?;
 
-    // Filter as kwarg
-    let filter = py.eval("lambda node: ('x'+str(node.name)+'x') in ('x'+str(id)+'x')", Some(&id_dict), None)?;
-    let filter_ = PyDict::new(py);
-    filter_.set_item(py, "filter_", filter)?;
+        // Filter as kwarg
+        let filter = py.eval_bound("lambda node: ('x'+str(node.name)+'x') in ('x'+str(id)+'x')", Some(&id_dict), None)?;
+        let filter_ = PyDict::new_bound(py);
+        filter_.set_item("filter_", filter)?;
 
-    // Parent value
-    let parent: Option<String> = None;
-    let par = anytree.call(py, "find", (tree,), Some(&filter_))?;
-    par.setattr(py, "parent", parent)?;
-    par.getattr(py, "parent")
+        // Parent value
+        let parent: Option<String> = None;
+        let anytree_call = anytree.call_method("find", (tree,), Some(&filter_))?;
+        anytree_call.setattr("parent", parent)?;
+        let par: PyObject = anytree_call.getattr("parent")?.extract()?;
+
+        Ok(par)
+    })
 }
 
 // Return all children for node
-pub fn return_children(tree: &PyObject, id: &str) -> Vec<String> {
-    let gil = Python::acquire_gil();
-    let py = gil.python();
-    let mut children: Vec<String> = Vec::new();
-    let id_dict = PyDict::new(py);
-    id_dict.set_item(py, "id", id).unwrap();
+pub fn return_children(tree: &PyObject, id: &str) -> Result<Vec<String>, PyErr> {
+    Python::with_gil(|py| {
+        // Set some values
+        let mut children: Vec<String> = Vec::new();
+        let id_dict = PyDict::new_bound(py);
+        id_dict.set_item("id", id)?;
 
-    // Import anytree
-    let anytree =  py.import("anytree").unwrap();
+        // Import anytree
+        let anytree =  py.import_bound("anytree")?;
 
-    // Filter as kwarg
-    let filter = py.eval("lambda node: ('x'+str(node.name)+'x') in ('x'+str(id)+'x')", Some(&id_dict), None).unwrap();
-    let filter_ = PyDict::new(py);
-    filter_.set_item(py, "filter_", filter).unwrap();
+        // Filter as kwarg
+        let filter = py.eval_bound("lambda node: ('x'+str(node.name)+'x') in ('x'+str(id)+'x')", Some(&id_dict), None)?;
+        let filter_ = PyDict::new_bound(py);
+        filter_.set_item("filter_", filter)?;
 
-    // Parent value
-    let par = anytree.call(py, "find", (tree,), Some(&filter_)).unwrap();
+        // Parent value
+        let par = anytree.call_method("find", (tree,), Some(&filter_))?;
 
-    // Import PreOrderIter
-    let preorderiter = anytree.call(py, "PreOrderIter", (par,), None).unwrap().iter(py).unwrap();
+        // Import PreOrderIter
+        let preorderiter = anytree.call_method("PreOrderIter", (par,), None)?.iter();
 
-    for child in preorderiter {
-        children.push(child.unwrap().getattr(py, "name").unwrap().to_string());
-    }
-    if let Some(index) = children.iter().position(|x| x == id) {
-        children.remove(index);
-    }
-    children
+        for child in preorderiter? {
+            children.push(child?.getattr("name").unwrap().to_string());
+        }
+        if let Some(index) = children.iter().position(|x| x == id) {
+            children.remove(index);
+        }
+        Ok(children)
+    })
 }
 
 // Print out tree with descriptions
 pub fn tree_print(tree: &PyObject) {
-    let snapshot = get_current_snapshot();
-    let gil = Python::acquire_gil();
-    let py = gil.python();
+    Python::with_gil(|py| {
+        let snapshot = get_current_snapshot();
 
-    // From anytree import AsciiStyle, RenderTree
-    let anytree =  py.import("anytree").unwrap();
-    let asciistyle = anytree.call(py, "AsciiStyle", NoArgs, None).unwrap();
-    let style = PyDict::new(py);
-    style.set_item(py, "style", asciistyle).unwrap();
-    let rendertree = anytree.call(py, "RenderTree", (&tree,), Some(&style)).unwrap();
+        // From anytree import AsciiStyle, RenderTree
+        let anytree =  py.import_bound("anytree").unwrap();
+        let asciistyle = anytree.call_method("AsciiStyle", PyTuple::empty_bound(py), None).unwrap();
+        let style = PyDict::new_bound(py);
+        style.set_item("style", asciistyle).unwrap();
+        let rendertree = anytree.call_method("RenderTree", (tree,), Some(&style)).unwrap();
 
-    for row in rendertree.iter(py).unwrap() {
-        let node = row.as_ref().unwrap().getattr(py, "node").unwrap();
-        if Path::new(&format!("/.snapshots/ash/snapshots/{}-desc", node.getattr(py, "name").unwrap().to_string())).is_file() {
-            let desc = read_to_string(format!("/.snapshots/ash/snapshots/{}-desc", node.getattr(py, "name").unwrap().to_string())).unwrap();
-            if snapshot != node.getattr(py, "name").unwrap().to_string() {
-                println!("{}{} - {}", row.unwrap().getattr(py, "pre").unwrap().to_string(), node.getattr(py, "name").unwrap().to_string(), desc);
+        for row in rendertree.iter().unwrap() {
+            let node = row.as_ref().unwrap().getattr("node").unwrap();
+            if Path::new(&format!("/.snapshots/ash/snapshots/{}-desc", node.getattr("name").unwrap().to_string())).is_file() {
+                let desc = read_to_string(format!("/.snapshots/ash/snapshots/{}-desc", node.getattr("name").unwrap().to_string())).unwrap();
+                if snapshot != node.getattr("name").unwrap().to_string() {
+                    println!("{}{} - {}", row.unwrap().getattr("pre").unwrap().to_string(), node.getattr("name").unwrap().to_string(), desc);
+                } else {
+                    println!("{}{}*- {}", row.unwrap().getattr("pre").unwrap().to_string(), node.getattr("name").unwrap().to_string(), desc);
+                }
+            } else if node.getattr("name").unwrap().to_string() == "0" {
+                let desc = "base snapshot.";
+                if snapshot != node.getattr("name").unwrap().to_string() {
+                    println!("{}{} - {}", row.unwrap().getattr("pre").unwrap().to_string(), node.getattr("name").unwrap().to_string(), desc);
+                } else {
+                    println!("{}{}*- {}", row.unwrap().getattr("pre").unwrap().to_string(), node.getattr("name").unwrap().to_string(), desc);
+                }
+            } else if node.getattr("name").unwrap().to_string() == "root" {
+                let desc = "";
+                if snapshot != node.getattr("name").unwrap().to_string() {
+                    println!("{}{} {}", row.unwrap().getattr("pre").unwrap().to_string(), node.getattr("name").unwrap().to_string(), desc);
+                } else {
+                    println!("{}{} {}", row.unwrap().getattr("pre").unwrap().to_string(), node.getattr("name").unwrap().to_string(), desc);
+                }
             } else {
-                println!("{}{}*- {}", row.unwrap().getattr(py, "pre").unwrap().to_string(), node.getattr(py, "name").unwrap().to_string(), desc);
-            }
-        } else if node.getattr(py, "name").unwrap().to_string() == "0" {
-            let desc = "base snapshot.";
-            if snapshot != node.getattr(py, "name").unwrap().to_string() {
-                println!("{}{} - {}", row.unwrap().getattr(py, "pre").unwrap().to_string(), node.getattr(py, "name").unwrap().to_string(), desc);
-            } else {
-                println!("{}{}*- {}", row.unwrap().getattr(py, "pre").unwrap().to_string(), node.getattr(py, "name").unwrap().to_string(), desc);
-            }
-        } else if node.getattr(py, "name").unwrap().to_string() == "root" {
-            let desc = "";
-            if snapshot != node.getattr(py, "name").unwrap().to_string() {
-                println!("{}{} {}", row.unwrap().getattr(py, "pre").unwrap().to_string(), node.getattr(py, "name").unwrap().to_string(), desc);
-            } else {
-                println!("{}{} {}", row.unwrap().getattr(py, "pre").unwrap().to_string(), node.getattr(py, "name").unwrap().to_string(), desc);
-            }
-        } else {
-            let desc = "";
-            if snapshot != node.getattr(py, "name").unwrap().to_string() {
-                println!("{}{} - {}", row.unwrap().getattr(py, "pre").unwrap().to_string(), node.getattr(py, "name").unwrap().to_string(), desc);
-            } else {
-                println!("{}{}*- {}", row.unwrap().getattr(py, "pre").unwrap().to_string(), node.getattr(py, "name").unwrap().to_string(), desc);
+                let desc = "";
+                if snapshot != node.getattr("name").unwrap().to_string() {
+                    println!("{}{} - {}", row.unwrap().getattr("pre").unwrap().to_string(), node.getattr("name").unwrap().to_string(), desc);
+                } else {
+                    println!("{}{}*- {}", row.unwrap().getattr("pre").unwrap().to_string(), node.getattr("name").unwrap().to_string(), desc);
+                }
             }
         }
-    }
+    })
 }
 
 // Save tree to file
-pub fn write_tree(tree: &PyObject) -> Result<(), std::io::Error> {
-    let gil = Python::acquire_gil();
-    let py = gil.python();
+pub fn write_tree(tree: &PyObject) -> Result<(), PyErr> {
+    Python::with_gil(|py| {
+        // Import DictExporter
+        let exporter = py.import_bound("anytree.exporter")?;
+        let dict_exporter = exporter.getattr("DictExporter")?;
+        let exporter_instance = dict_exporter.call(PyTuple::empty_bound(py), None)?;
 
-    // Import DictExporter
-    let exporter = py.import("anytree.exporter").unwrap();
-    let dict_exporter = exporter.get(py, "DictExporter").unwrap();
-    let exporter_instance = dict_exporter.call(py, NoArgs, None).unwrap();
+        // Open & edit tree file
+        let fstreepath = "/.snapshots/ash/fstree";
+        let mut fsfile = OpenOptions::new().read(true)
+                                           .write(true)
+                                           .truncate(true)
+                                           .open(fstreepath)?;
 
-    // Open & edit tree file
-    let fstreepath = "/.snapshots/ash/fstree";
-    let mut fsfile = OpenOptions::new().read(true)
-                                       .write(true)
-                                       .truncate(true)
-                                       .open(fstreepath)
-                                       .unwrap();
-
-    // Call export function with fstree argument
-    let to_write = exporter_instance.call_method(py, "export", (&tree,), None);
-    let write = fsfile.write_all(to_write.unwrap().to_string().as_bytes());
-    write
+        // Call export function with fstree argument
+        let to_write = exporter_instance.call_method("export", (tree,), None);
+        let write = fsfile.write_all(to_write.unwrap().to_string().as_bytes())?;
+        Ok(write)
+    })
 }

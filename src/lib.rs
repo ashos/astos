@@ -19,7 +19,7 @@ use std::process::{Command, ExitStatus};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tempfile::TempDir;
-use tree::*;
+use tree::*; // TODO Drop python-anytree
 use walkdir::WalkDir;
 
 //  Select file system foramt
@@ -118,9 +118,15 @@ pub fn ash_mounts(i: &str, chr: &str) -> nix::Result<()> {
     }
 
     // Mount /etc/resolv.conf
-    // Fedora links file to /run/systemd/resolve/reslov.conf
     if Path::new(&format!("{}/etc/resolv.conf", snapshot_path)).try_exists().unwrap() {
         mount(Some("/etc/resolv.conf"), format!("{}/etc/resolv.conf", snapshot_path).as_str(),
+              Some(file_system), MsFlags::MS_BIND | MsFlags::MS_SLAVE, None::<&str>)?;
+    } else {
+        // Fedora links file to /run/systemd/resolve/stub-resolv.conf
+        DirBuilder::new().recursive(true)
+                         .create(format!("{}/run/systemd/resolve", snapshot_path)).unwrap();
+        File::create(format!("{}/run/systemd/resolve/stub-resolv.conf", snapshot_path)).unwrap();
+        mount(Some("/etc/resolv.conf"), format!("{}/run/systemd/resolve/stub-resolv.conf", snapshot_path).as_str(),
               Some(file_system), MsFlags::MS_BIND | MsFlags::MS_SLAVE, None::<&str>)?;
     }
 
@@ -136,6 +142,10 @@ pub fn ash_umounts(i: &str, chr: &str) -> nix::Result<()> {
     if Path::new(&format!("{}/etc/resolv.conf", snapshot_path)).try_exists().unwrap() {
         umount2(Path::new(&format!("{}/etc/resolv.conf", snapshot_path)),
                 MntFlags::empty())?;
+    } else {
+        umount2(Path::new(&format!("{}/run/systemd/resolve/stub-resolv.conf", snapshot_path)),
+                MntFlags::empty())?;
+        std::fs::remove_dir_all(format!("{}/run/systemd/resolve", snapshot_path)).unwrap();
     }
 
     // Check EFI
@@ -729,7 +739,7 @@ pub fn clone_recursive(snapshot: &str) -> Result<(), Error> {
         // Import tree file
         let tree = fstree().unwrap();
         // Clone its branch and replace the original child with the clone
-        let mut children = return_children(&tree, snapshot);
+        let mut children = return_children(&tree, snapshot)?;
         let ch = children.clone();
         children.insert(0, snapshot.to_string());
         let ntree = clone_branch(snapshot)?;
@@ -872,7 +882,7 @@ pub fn delete_node(snapshots: &Vec<String>, quiet: bool, nuke: bool) -> Result<(
                 delete_subvolume(&format!("/.snapshots/rootfs/snapshot-chr{}", snapshot))?;
             }
 
-            for child in children {
+            for child in children? {
                 // This deletes the node itself along with its children
                 let desc_path = format!("/.snapshots/ash/snapshots/{}-desc", child);
                 if Path::new(&desc_path).is_file() {
@@ -913,6 +923,12 @@ pub fn deploy(snapshot: &str, secondary: bool, reset: bool) -> Result<String, Er
                 ErrorKind::Unsupported,
                 format!("Snapshot {} appears to be in use. If you're certain it's not in use, clear lock with 'ash unlock -s {}'.",
                         snapshot,snapshot)));
+    } else if Path::new("/.snapshots/rootfs/snapshot-chr0").try_exists()? {
+        // Make sure base snapshot is not in use by another ash process
+        return Err(
+            Error::new(
+                ErrorKind::Unsupported,
+                "Snapshot 0 appears to be in use. If you're certain it's not in use, clear lock with 'ash unlock -s 0'."));
 
     } else {
         // Create rollback snapshot
@@ -3033,7 +3049,7 @@ pub fn reset() -> Result<(), Error> {
             prepare("0")?;
             copy("/.snapshots/rootfs/snapshot-chr0/etc/rc.local.bak", "/.snapshots/rootfs/snapshot-chr0/etc/rc.local")?;
             post_transactions("0")?;
-            for snapshot in snapshots {
+            for snapshot in snapshots? {
                 // Delete snapshot if exist
                 if Path::new(&format!("/.snapshots/rootfs/snapshot-{}", snapshot)).try_exists()?
                 && snapshot.to_string() != current_snapshot && snapshot.to_string() != "0" {
@@ -4070,13 +4086,13 @@ pub fn upgrade(snapshot:  &str, baseup: bool, noconfirm: bool) -> Result<(), Err
 pub fn which_snapshot_has(pkgs: Vec<String>) {
     // Collect snapshots
     let tree = fstree().unwrap();
-    let snapshots = return_children(&tree, "root");
+    let snapshots = return_children(&tree, "root").unwrap();
 
     // Search snapshots for package
     for pkg in pkgs {
         let mut snapshot: Vec<String> = Vec::new();
         for snap in &snapshots {
-            if is_pkg_installed(&&snap.to_string(), &pkg) {
+            if is_pkg_installed(&snap.to_string(), &pkg) {
                 snapshot.push(format!("{}", snap.to_string()));
             }
         }
