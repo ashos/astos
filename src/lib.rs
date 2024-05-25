@@ -35,7 +35,7 @@ use zfs::*;
 
 // Select bootloader
 #[cfg(feature = "grub")]
-mod grub;
+pub mod grub;
 #[cfg(feature = "grub")]
 use grub::*;
 //TODO add systemd-boot
@@ -137,8 +137,8 @@ pub fn ash_mounts(i: &str, chr: &str) -> nix::Result<()> {
 pub fn ash_umounts(i: &str, chr: &str) -> nix::Result<()> {
     let snapshot_path = format!("/.snapshots/rootfs/snapshot-{}{}", chr, i);
 
-    // Unmount in reverse order
-    // Unmount /etc/resolv.conf
+    // Umount in reverse order
+    // Umount /etc/resolv.conf
     if Path::new(&format!("{}/etc/resolv.conf", snapshot_path)).try_exists().unwrap() {
         umount2(Path::new(&format!("{}/etc/resolv.conf", snapshot_path)),
                 MntFlags::empty())?;
@@ -155,38 +155,38 @@ pub fn ash_umounts(i: &str, chr: &str) -> nix::Result<()> {
                 MntFlags::empty())?;
     }
 
-    // Unmount /var
+    // Umount /var
     if chr != "chr" {
         umount2(Path::new(&format!("{}/var", snapshot_path)),
                 MntFlags::empty())?;
     }
-    // Unmount chroot /tmp
+    // Umount chroot /tmp
     umount2(Path::new(&format!("{}/tmp", snapshot_path)),
             MntFlags::MNT_DETACH)?;
-    // Unmount chroot /sys
+    // Umount chroot /sys
     umount2(Path::new(&format!("{}/sys", snapshot_path)),
             MntFlags::MNT_DETACH)?;
-    // Unmount chroot /run
+    // Umount chroot /run
     umount2(Path::new(&format!("{}/run", snapshot_path)),
             MntFlags::MNT_DETACH)?;
-    // Unmount chroot /root
+    // Umount chroot /root
     umount2(Path::new(&format!("{}/root", snapshot_path)),
             MntFlags::MNT_DETACH)?;
-    // Unmount chroot /proc
+    // Umount chroot /proc
     umount2(Path::new(&format!("{}/proc", snapshot_path)),
             MntFlags::MNT_DETACH)?;
-    // Unmount chroot /home
+    // Umount chroot /home
     umount2(Path::new(&format!("{}/home", snapshot_path)),
             MntFlags::MNT_DETACH)?;
-    // Unmount chroot /etc
+    // Umount chroot /etc
     if chr != "chr" {
         umount2(Path::new(&format!("{}/etc", snapshot_path)),
                 MntFlags::MNT_DETACH)?;
     }
-    // Unmount chroot /dev
+    // Umount chroot /dev
     umount2(Path::new(&format!("{}/dev", snapshot_path)),
             MntFlags::MNT_DETACH)?;
-    // Unmount chroot directory
+    // Umount chroot directory
     umount2(Path::new(&format!("{}", snapshot_path)),
             MntFlags::MNT_DETACH)?;
 
@@ -262,7 +262,7 @@ fn check_profile(snapshot: &str) -> Result<(), Error> {
     write_options.blank_lines_between_sections = 1;
     // Get values before edit
     let old_cfile = format!("/.snapshots/etc/etc-{}/ash/profile", snapshot);
-    let mut old_profconf = Ini::new();
+    let mut old_profconf = Ini::new_cs();
     old_profconf.set_comment_symbols(&['#']);
     old_profconf.set_multiline(true);
     old_profconf.load(&old_cfile).unwrap();
@@ -293,7 +293,7 @@ fn check_profile(snapshot: &str) -> Result<(), Error> {
 
     // Get new values
     let cfile = format!("/.snapshots/rootfs/snapshot-chr{}/etc/ash/profile", snapshot);
-    let mut profconf = Ini::new();
+    let mut profconf = Ini::new_cs();
     profconf.set_comment_symbols(&['#']);
     profconf.set_multiline(true);
     profconf.load(&cfile).unwrap();
@@ -2062,7 +2062,7 @@ fn install_profile(snapshot: &str, profile: &str, force: bool, secondary: bool,
         prepare(snapshot)?;
 
         // Profile configurations
-        let mut profconf = Ini::new();
+        let mut profconf = Ini::new_cs();
         profconf.set_comment_symbols(&['#']);
         profconf.set_multiline(true);
         // Load profile if exist
@@ -2152,7 +2152,7 @@ fn install_profile_live(snapshot: &str,profile: &str, force: bool, user_profile:
     if upgrade_helper_live(&tmp, noconfirm).is_ok() {
 
         // Profile configurations
-        let mut profconf = Ini::new();
+        let mut profconf = Ini::new_cs();
         profconf.set_comment_symbols(&['#']);
         profconf.set_multiline(true);
 
@@ -2481,7 +2481,7 @@ pub fn post_transactions(snapshot: &str) -> Result<(), Error> {
                         true)?;
     }
 
-    // Unmount in reverse order
+    // Umount in reverse order
     ash_umounts(snapshot, "chr")?;
 
     // Special mutable directories
@@ -2783,7 +2783,7 @@ pub fn rebuild(snapshot: &str, snap_num: i32, desc: &str) -> Result<i32, Error> 
                         &format!("/.snapshots/var/var-chr{}", snap_num),
                         immutability)?;
 
-        // Unmount in reverse order
+        // Umount in reverse order
         ash_umounts(snapshot, "chr")?;
 
         // Delete old snapshot chroot
@@ -2916,7 +2916,7 @@ pub fn rebuild_base() -> Result<(), Error> {
 pub fn rebuild_prep(snapshot: &str) -> Result<(), Error> {
     //Profile configurations
     let cfile = format!("/.snapshots/etc/etc-{}/ash/profile", snapshot);
-    let mut profconf = Ini::new();
+    let mut profconf = Ini::new_cs();
     profconf.set_comment_symbols(&['#']);
     profconf.set_multiline(true);
     // Load profile
@@ -3844,7 +3844,7 @@ fn uninstall_profile(snapshot: &str, profile: &str, user_profile: &str, noconfir
         prepare(snapshot)?;
 
         // Profile configurations
-        let mut profconf = Ini::new();
+        let mut profconf = Ini::new_cs();
         profconf.set_comment_symbols(&['#']);
         profconf.set_multiline(true);
         // Load profile if exist
@@ -3891,7 +3891,7 @@ fn uninstall_profile_live(snapshot: &str,profile: &str, user_profile: &str, noco
     ash_mounts(&tmp, "")?;
 
     // Profile configurations
-    let mut profconf = Ini::new();
+    let mut profconf = Ini::new_cs();
     profconf.set_comment_symbols(&['#']);
     profconf.set_multiline(true);
 

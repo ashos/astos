@@ -19,6 +19,8 @@ pub fn auto_upgrade(snapshot: &str) -> Result<(), Error> {
     } else {
         // Required in virtualbox, otherwise error in package db update
         sync_time()?;
+
+        // Prepare snapshot
         prepare(snapshot)?;
 
 
@@ -146,7 +148,7 @@ pub fn install_package_helper(snapshot:&str, pkgs: &Vec<String>, noconfirm: bool
     prepare(snapshot)?;
     //Profile configurations
     let cfile = format!("/.snapshots/rootfs/snapshot-chr{}/etc/ash/profile", snapshot);
-    let mut profconf = Ini::new();
+    let mut profconf = Ini::new_cs();
     profconf.set_comment_symbols(&['#']);
     profconf.set_multiline(true);
     let mut write_options = WriteOptions::default();
@@ -310,20 +312,24 @@ pub fn lockpkg(snapshot:&str, profconf: &Ini) -> Result<(), Error> {
 
 // Get list of installed packages and exclude packages installed as dependencies
 pub fn no_dep_pkg_list(snapshot: &str, chr: &str) -> Vec<String> {
+    prepare(snapshot).unwrap();
     let dpkg_query = "dpkg-query -W $(apt-mark showmanual) | awk '{print $1}' | sed 's/:.*$//'";
     let excode = Command::new("sh").arg("-c")
                                    .arg(format!("chroot /.snapshots/rootfs/snapshot-{}{} {}", chr,snapshot,dpkg_query))
                                    .output().unwrap();
+    post_transactions(snapshot).unwrap();
     let stdout = String::from_utf8_lossy(&excode.stdout).trim().to_string();
     stdout.split('\n').map(|s| s.to_string()).collect()
 }
 
 // Get list of packages installed in a snapshot
 pub fn pkg_list(snapshot: &str, chr: &str) -> Vec<String> {
+    prepare(snapshot).unwrap();
     let dpkg_query = "dpkg-query -W -f='${Package}\n'";
     let excode = Command::new("sh").arg("-c")
                                    .arg(format!("chroot /.snapshots/rootfs/snapshot-{}{} {}", chr,snapshot,dpkg_query))
                                    .output().unwrap();
+    post_transactions(snapshot).unwrap();
     let stdout = String::from_utf8_lossy(&excode.stdout).trim().to_string();
     stdout.split('\n').map(|s| s.to_string()).collect()
 }
@@ -437,9 +443,11 @@ pub fn system_config(snapshot: &str, profconf: &Ini) -> Result<(), Error> {
 
     // Copy grub configuration
     #[cfg(feature = "grub")]
+    let grub = grub::get_grub(snapshot).unwrap();
+    #[cfg(feature = "grub")]
     Command::new("cp").args(["-n", "-r", "--reflink=auto"])
-                      .arg(format!("/.snapshots/rootfs/snapshot-{}/boot/grub", snapshot))
-                      .arg(format!("/.snapshots/rootfs/snapshot-chr{}/boot/grub", snapshot))
+                      .arg(format!("/.snapshots/rootfs/snapshot-{}/boot/{}/.", snapshot,grub))
+                      .arg(format!("/.snapshots/rootfs/snapshot-chr{}/boot/{}", snapshot,grub))
                       .output()?;
     #[cfg(feature = "grub")]
     Command::new("cp").args(["-n", "-r", "--reflink=auto"])
@@ -543,7 +551,7 @@ pub fn tree_sync_helper(s_f: &str, s_t: &str, chr: &str) -> Result<(), Error>  {
 pub fn uninstall_package_helper(snapshot: &str, pkgs: &Vec<String>, noconfirm: bool) -> Result<(), Error> {
     // Profile configurations
     let cfile = format!("/.snapshots/rootfs/snapshot-chr{}/etc/ash/profile", snapshot);
-    let mut profconf = Ini::new();
+    let mut profconf = Ini::new_cs();
     profconf.set_comment_symbols(&['#']);
     profconf.set_multiline(true);
     let mut write_options = WriteOptions::default();

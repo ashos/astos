@@ -29,7 +29,7 @@ pub fn delete_old_grub_files(grub: &str) -> Result<(), Error> {
 }
 
 // Get Grub path
-fn get_grub(snapshot: &str) -> Option<String> {
+pub fn get_grub(snapshot: &str) -> Option<String> {
     let boot_dir = format!("/.snapshots/boot/boot-{}", snapshot);
     let grub_dirs: Vec<String> = WalkDir::new(boot_dir)
         .into_iter()

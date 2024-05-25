@@ -687,7 +687,7 @@ fn main() {
                 };
 
                 // chr value
-                let chr = "";
+                let chr = "chr";
 
                 // Optional value
                 let exclude = list_matches.get_flag("exclude-dependency");
@@ -695,6 +695,10 @@ fn main() {
                 // Make sure snapshot exists
                 if !Path::new(&format!("/.snapshots/rootfs/snapshot-{}", snapshot)).try_exists().unwrap() {
                     eprintln!("Cannot list packages as snapshot {} doesn't exist.", snapshot);
+                } else if Path::new(&format!("/.snapshots/rootfs/snapshot-chr{}", snapshot)).try_exists().unwrap() {
+                    // Make sure snapshot is not in use by another ash process
+                    eprintln!("Snapshot {} appears to be in use. If you're certain it's not in use, clear lock with 'ash unlock -s {}'.",
+                              snapshot,snapshot);
                 } else {
                     // Run list
                     let run = list(&snapshot, chr, exclude);

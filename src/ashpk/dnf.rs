@@ -1,4 +1,4 @@
-use crate::{check_profile, chr_delete, chroot_exec, get_tmp, is_system_pkg,
+use crate::{check_profile, chr_delete, chroot_exec, get_tmp, grub, is_system_pkg,
             is_system_locked, post_transactions, prepare,
             remove_dir_content, sync_time};
 
@@ -19,6 +19,8 @@ pub fn auto_upgrade(snapshot: &str) -> Result<(), Error> {
     } else {
         // Required in virtualbox, otherwise error in package db update
         sync_time()?;
+
+        // Prepare snapshot
         prepare(snapshot)?;
 
         // Use dnf
@@ -57,7 +59,7 @@ pub fn auto_upgrade(snapshot: &str) -> Result<(), Error> {
 
 // Reinstall base packages in snapshot
 pub fn bootstrap(snapshot: &str) -> Result<(), Error> {
-    let packages = "dnf rpm";
+    let packages = "basesystem dnf glibc-all-langpacks";
     let release = code_name(snapshot);
     let target_path = format!("/.snapshots/rootfs/snapshot-chr{}", snapshot);
     let bootstrap_cmd = format!("dnf --installroot='{}' install -y {} --releasever='{}'", target_path,packages,release);
@@ -123,7 +125,7 @@ pub fn install_package_helper(snapshot:&str, pkgs: &Vec<String>, noconfirm: bool
     prepare(snapshot)?;
     //Profile configurations
     let cfile = format!("/.snapshots/rootfs/snapshot-chr{}/etc/ash/profile", snapshot);
-    let mut profconf = Ini::new();
+    let mut profconf = Ini::new_cs();
     profconf.set_comment_symbols(&['#']);
     profconf.set_multiline(true);
     let mut write_options = WriteOptions::default();
@@ -248,22 +250,28 @@ pub fn lockpkg(snapshot:&str, profconf: &Ini) -> Result<(), Error> {
         }
     }
     Ok(())
- }
+}
 
 // Get list of installed packages and exclude packages installed as dependencies
 pub fn no_dep_pkg_list(snapshot: &str, chr: &str) -> Vec<String> {
+    prepare(snapshot).unwrap();
+    let dpkg_query = "dnf repoquery -C --userinstalled --qf='%{name}'";
     let excode = Command::new("sh").arg("-c")
-                                   .arg(format!("chroot /.snapshots/rootfs/snapshot-{}{} dnf repoquery --userinstalled --qf='%{{name}}'", chr,snapshot))
+                                   .arg(format!("chroot /.snapshots/rootfs/snapshot-{}{} {}", chr,snapshot,dpkg_query))
                                    .output().unwrap();
+    post_transactions(snapshot).unwrap();
     let stdout = String::from_utf8_lossy(&excode.stdout).trim().to_string();
     stdout.split('\n').map(|s| s.to_string()).collect()
 }
 
 // Get list of packages installed in a snapshot
 pub fn pkg_list(snapshot: &str, chr: &str) -> Vec<String> {
+    prepare(snapshot).unwrap();
+    let dpkg_query = "dnf repoquery -C --installed --qf='%{name}'";
     let excode = Command::new("sh").arg("-c")
-                                   .arg(format!("chroot /.snapshots/rootfs/snapshot-{}{} dnf repoquery --installed --qf='%{{name}}'", chr,snapshot))
+                                   .arg(format!("chroot /.snapshots/rootfs/snapshot-{}{} {}", chr,snapshot,dpkg_query))
                                    .output().unwrap();
+    post_transactions(snapshot).unwrap();
     let stdout = String::from_utf8_lossy(&excode.stdout).trim().to_string();
     stdout.split('\n').map(|s| s.to_string()).collect()
 }
@@ -359,9 +367,11 @@ pub fn system_config(snapshot: &str, profconf: &Ini) -> Result<(), Error> {
 
     // Copy grub configuration
     #[cfg(feature = "grub")]
+    let grub = grub::get_grub(snapshot).unwrap();
+    #[cfg(feature = "grub")]
     Command::new("cp").args(["-n", "-r", "--reflink=auto"])
-                      .arg(format!("/.snapshots/rootfs/snapshot-{}/boot/grub", snapshot))
-                      .arg(format!("/.snapshots/rootfs/snapshot-chr{}/boot/grub", snapshot))
+                      .arg(format!("/.snapshots/rootfs/snapshot-{}/boot/{}/.", snapshot,grub))
+                      .arg(format!("/.snapshots/rootfs/snapshot-chr{}/boot/{}", snapshot,grub))
                       .output()?;
     #[cfg(feature = "grub")]
     Command::new("cp").args(["-n", "-r", "--reflink=auto"])
@@ -377,7 +387,7 @@ pub fn system_config(snapshot: &str, profconf: &Ini) -> Result<(), Error> {
     // Install system packages
     if profconf.sections().contains(&"system-packages".to_string()) {
         let mut pkgs_list: Vec<String> = Vec::new();
-        for pkg in profconf.get_map().unwrap().get("system-packages").unwrap().keys() {
+        for pkg in profconf.get_map_ref().get("system-packages").unwrap().keys() {
             pkgs_list.push(pkg.to_string());
         }
         if !pkgs_list.is_empty() {
@@ -464,7 +474,7 @@ pub fn tree_sync_helper(s_f: &str, s_t: &str, chr: &str) -> Result<(), Error>  {
 pub fn uninstall_package_helper(snapshot: &str, pkgs: &Vec<String>, noconfirm: bool) -> Result<(), Error> {
     // Profile configurations
     let cfile = format!("/.snapshots/rootfs/snapshot-chr{}/etc/ash/profile", snapshot);
-    let mut profconf = Ini::new();
+    let mut profconf = Ini::new_cs();
     profconf.set_comment_symbols(&['#']);
     profconf.set_multiline(true);
     let mut write_options = WriteOptions::default();
