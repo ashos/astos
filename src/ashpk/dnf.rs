@@ -184,7 +184,7 @@ pub fn install_package_helper_chroot(snapshot:&str, pkgs: &Vec<String>, noconfir
 
     if !dnf_install.success() {
         return Err(Error::new(ErrorKind::Other,
-                              format!("Failed to install package(s).")));
+                              "Failed to install package(s)."));
     }
     Ok(())
 }
@@ -238,28 +238,28 @@ pub fn lockpkg(snapshot:&str, profconf: &Ini) -> Result<(), Error> {
         }
     }
 
+    let mut lockpkg = String::new();
     if !system_pkgs.is_empty() {
         for pkg in system_pkgs {
-            let excode = Command::new("sh").arg("-c")
-                                           .arg(format!("chroot /.snapshots/rootfs/snapshot-chr{} dnf mark install {}", snapshot,pkg))
-                                           .status()?;
-            if !excode.success() {
-                return Err(Error::new(ErrorKind::Other,
-                                      format!("Failed to run 'dnf mark install {}'.", pkg)));
-            }
+            let rule = format!("{}\n", pkg);
+            lockpkg.push_str(&rule);
         }
     }
+    let mut rule_file = OpenOptions::new().truncate(true)
+                                          .create(true)
+                                          .read(true)
+                                          .write(true)
+                                          .open(format!("/.snapshots/rootfs/snapshot-chr{}/etc/dnf/protected.d/ash_system_packages.conf", snapshot))?;
+    rule_file.write_all(lockpkg.as_bytes())?;
     Ok(())
 }
 
 // Get list of installed packages and exclude packages installed as dependencies
 pub fn no_dep_pkg_list(snapshot: &str, chr: &str) -> Vec<String> {
-    prepare(snapshot).unwrap();
     let dpkg_query = "dnf repoquery -C --userinstalled --qf='%{name}'";
     let excode = Command::new("sh").arg("-c")
                                    .arg(format!("chroot /.snapshots/rootfs/snapshot-{}{} {}", chr,snapshot,dpkg_query))
                                    .output().unwrap();
-    post_transactions(snapshot).unwrap();
     let stdout = String::from_utf8_lossy(&excode.stdout).trim().to_string();
     stdout.split('\n').map(|s| s.to_string()).collect()
 }

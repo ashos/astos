@@ -45,7 +45,7 @@ use grub::*;
 use ashpk::apk::*; // TODO
 #[cfg(feature = "apt")]
 use ashpk::apt::*;
-#[cfg(feature = "dnf")] // TODO
+#[cfg(feature = "dnf")]
 use ashpk::dnf::*;
 #[cfg(feature = "pkgtool")] // TODO
 use ashpk::pkgtool::*;
@@ -53,7 +53,7 @@ use ashpk::pkgtool::*;
 use ashpk::portage::*;
 #[cfg(feature = "xbps")] // TODO
 use ashpk::xbps::*;
-#[cfg(feature = "pacman")] // TODO
+#[cfg(feature = "pacman")]
 // Default
 use ashpk::pacman::*;
 
@@ -400,7 +400,7 @@ fn check_profile(snapshot: &str) -> Result<(), Error> {
         uninstall_package_helper_chroot(snapshot, &pkgs_to_uninstall, true)?;
     }
 
-    // Check pacman database
+    // Check database
     let pkg_list = no_dep_pkg_list(snapshot, "chr");
     for pkg in &pkg_list {
         let mut pkgs: Vec<String> = Vec::new();
@@ -541,7 +541,7 @@ pub fn chroot(snapshot: &str, cmds: Vec<String>) -> Result<(), Error> {
         // Prepare snapshot for chroot and run command if existed
         if !cmds.is_empty() {
             // Chroot to snapshot path
-            for  cmd in cmds {
+            for cmd in cmds {
                 if prepare(snapshot).is_ok() {
                     // Run command in chroot
                     if chroot_exec(&path, &cmd).is_ok() {
@@ -2384,11 +2384,13 @@ fn is_system_pkg(profconf: &Ini, pkg: String) -> bool {
 
 // Package list
 pub fn list(snapshot: &str, chr: &str, exclude: bool) -> Vec<String> {
+    prepare(snapshot).unwrap();
     let list = if exclude {
         no_dep_pkg_list(snapshot, chr)
     } else {
         pkg_list(snapshot, chr)
     };
+    post_transactions(snapshot).unwrap();
     list
 }
 

@@ -3,7 +3,7 @@ use crate::{chroot_exec, deploy_recovery, detect_distro, get_aux_tmp, get_part, 
 
 use chrono::{NaiveDateTime, Local};
 use nix::mount::{mount, MntFlags, MsFlags, umount2};
-use std::fs::{copy, File, OpenOptions};
+use std::fs::{copy, DirBuilder, File, OpenOptions};
 use std::io::{BufRead, BufReader, Error, ErrorKind, Read, Write};
 use std::path::Path;
 use std::process::Command;
@@ -334,6 +334,11 @@ pub fn update_boot(snapshot: &str, secondary: bool) -> Result<(), Error> {
 
         // Copy backup
         if snapshot != "0" {
+            if !Path::new(&format!("/.snapshots/rootfs/snapshot-chr{}/boot/{}/BAK/", snapshot,grub)).try_exists()? {
+                DirBuilder::new().recursive(true)
+                                 .create(format!("/.snapshots/rootfs/snapshot-chr{}/boot/{}/BAK", snapshot,grub))?;
+
+            }
             copy(format!("/.snapshots/rootfs/snapshot-chr{}/boot/{}/grub.cfg", snapshot,grub),
                  format!("/.snapshots/rootfs/snapshot-chr{}/boot/{}/BAK/grub.cfg.{}", snapshot,grub,formatted))?;
         }

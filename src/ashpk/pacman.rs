@@ -518,11 +518,9 @@ pub fn lockpkg(snapshot:&str, profconf: &Ini) -> Result<(), Error> {
 
 // Get list of installed packages and exclude packages installed as dependencies
 pub fn no_dep_pkg_list(snapshot: &str, chr: &str) -> Vec<String> {
-    prepare(snapshot).unwrap();
     let excode = Command::new("sh").arg("-c")
                                    .arg(format!("chroot /.snapshots/rootfs/snapshot-{}{} pacman -Qqe", chr,snapshot))
                                    .output().unwrap();
-    post_transactions(snapshot).unwrap();
     let stdout = String::from_utf8_lossy(&excode.stdout).trim().to_string();
     stdout.split('\n').map(|s| s.to_string()).collect()
 }

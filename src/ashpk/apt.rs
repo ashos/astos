@@ -226,11 +226,11 @@ pub fn install_package_helper_chroot(snapshot:&str, pkgs: &Vec<String>, noconfir
 
     if !apt_update.success() {
         return Err(Error::new(ErrorKind::Other,
-                              format!("Failed to run apt-get update")));
+                              "Failed to run apt-get update"));
     }
     if !apt_install.success() {
         return Err(Error::new(ErrorKind::Other,
-                              format!("Failed to install package(s).")));
+                              "Failed to install package(s)."));
     }
     Ok(())
 }
@@ -312,12 +312,10 @@ pub fn lockpkg(snapshot:&str, profconf: &Ini) -> Result<(), Error> {
 
 // Get list of installed packages and exclude packages installed as dependencies
 pub fn no_dep_pkg_list(snapshot: &str, chr: &str) -> Vec<String> {
-    prepare(snapshot).unwrap();
     let dpkg_query = "dpkg-query -W $(apt-mark showmanual) | awk '{print $1}' | sed 's/:.*$//'";
     let excode = Command::new("sh").arg("-c")
                                    .arg(format!("chroot /.snapshots/rootfs/snapshot-{}{} {}", chr,snapshot,dpkg_query))
                                    .output().unwrap();
-    post_transactions(snapshot).unwrap();
     let stdout = String::from_utf8_lossy(&excode.stdout).trim().to_string();
     stdout.split('\n').map(|s| s.to_string()).collect()
 }
