@@ -1,6 +1,6 @@
-#[cfg(feature = "apk")]
+//#[cfg(feature = "apk")]
 // APK package manager
-pub mod apk;
+//pub mod apk;
 
 #[cfg(feature = "apt")]
 // APT package manager
@@ -10,17 +10,17 @@ pub mod apt;
 // DNF package manager
 pub mod dnf;
 
-#[cfg(feature = "pkgtool")] // TODO
+//#[cfg(feature = "pkgtool")] // TODO
 // PKGTOOL
-pub mod pkgtool;
+//pub mod pkgtool;
 
-#[cfg(feature = "portage")] // TODO
+//#[cfg(feature = "portage")] // TODO
 // Portage package manager
-pub mod portage;
+//pub mod portage;
 
-#[cfg(feature = "xbps")] // TODO
+//#[cfg(feature = "xbps")] // TODO
 // XBPS package manager
-pub mod xbps;
+//pub mod xbps;
 
 // Pacman package manager
 #[cfg(feature = "pacman")]

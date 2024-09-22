@@ -28,10 +28,10 @@ use walkdir::WalkDir;
 mod btrfs;
 #[cfg(feature = "btrfs")]
 use btrfs::*;
-#[cfg(feature = "zfs")] //TODO
-mod zfs;
-#[cfg(feature = "zfs")] //TODO
-use zfs::*;
+//#[cfg(feature = "zfs")] //TODO
+//mod zfs;
+//#[cfg(feature = "zfs")] //TODO
+//use zfs::*;
 
 // Select bootloader
 #[cfg(feature = "grub")]
@@ -41,18 +41,18 @@ use grub::*;
 //TODO add systemd-boot
 
 // Select package manager
-#[cfg(feature = "apk")]
-use ashpk::apk::*; // TODO
+//#[cfg(feature = "apk")]
+//use ashpk::apk::*; // TODO
 #[cfg(feature = "apt")]
 use ashpk::apt::*;
 #[cfg(feature = "dnf")]
 use ashpk::dnf::*;
-#[cfg(feature = "pkgtool")] // TODO
-use ashpk::pkgtool::*;
-#[cfg(feature = "portage")] // TODO
-use ashpk::portage::*;
-#[cfg(feature = "xbps")] // TODO
-use ashpk::xbps::*;
+//#[cfg(feature = "pkgtool")] // TODO
+//use ashpk::pkgtool::*;
+//#[cfg(feature = "portage")] // TODO
+//use ashpk::portage::*;
+//#[cfg(feature = "xbps")] // TODO
+//use ashpk::xbps::*;
 #[cfg(feature = "pacman")]
 // Default
 use ashpk::pacman::*;
