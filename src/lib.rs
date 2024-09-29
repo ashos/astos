@@ -2384,13 +2384,14 @@ fn is_system_pkg(profconf: &Ini, pkg: String) -> bool {
 
 // Package list
 pub fn list(snapshot: &str, chr: &str, exclude: bool) -> Vec<String> {
-    prepare(snapshot).unwrap();
     let list = if exclude {
-        no_dep_pkg_list(snapshot, chr)
+        prepare(snapshot).unwrap();
+        let list = no_dep_pkg_list(snapshot, chr);
+        post_transactions(snapshot).unwrap();
+        list
     } else {
         pkg_list(snapshot, chr)
     };
-    post_transactions(snapshot).unwrap();
     list
 }
 
