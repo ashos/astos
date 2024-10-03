@@ -280,10 +280,10 @@ pub fn switch_tmp(snapshot: &str, secondary: bool, reset: bool) -> Result<String
     }
 
     // Switch grub.cfg
-    if grub == "grub" {
+    if grub == "grub" && Path::new(&format!("{}/grub2/grub.cfg", &tmp_boot.path().to_str().unwrap())).try_exists()? {
         copy(format!("{}/{}/grub.cfg", &tmp_boot.path().to_str().unwrap(), grub),
              format!("{}/grub2/grub.cfg", &tmp_boot.path().to_str().unwrap()))?;
-    } else {
+    } else if grub != "grub" && Path::new(&format!("{}/grub/grub.cfg", &tmp_boot.path().to_str().unwrap())).try_exists()? {
         copy(format!("{}/{}/grub.cfg", &tmp_boot.path().to_str().unwrap(), grub),
              format!("{}/grub/grub.cfg", &tmp_boot.path().to_str().unwrap()))?;
     }
