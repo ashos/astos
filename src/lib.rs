@@ -258,6 +258,7 @@ pub fn check_mutability(snapshot: &str) -> bool {
 
 // Check if snapshot profile was changed
 fn check_profile(snapshot: &str) -> Result<(), Error> {
+    println!("Saving the changes, Please wait.");
     let mut write_options = WriteOptions::default();
     write_options.blank_lines_between_sections = 1;
     // Get values before edit
