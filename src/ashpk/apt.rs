@@ -1,4 +1,4 @@
-use crate::{check_profile, chr_delete, chroot_exec, get_tmp,
+use crate::{check_profile, chr_delete, chroot_exec, get_tmp, grub,
             is_system_locked, is_system_pkg, post_transactions,
             prepare, remove_dir_content, sync_time};
 

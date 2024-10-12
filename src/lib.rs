@@ -1480,7 +1480,7 @@ pub fn get_next_snapshot() -> String {
         file.read_to_string(&mut contents).unwrap();
         return contents.to_string().trim().to_string();
     } else {
-        // Return empty string in case no snapshot is deploye
+        // Return empty string in case no snapshot is deployed
         return "".to_string()
     }
 }

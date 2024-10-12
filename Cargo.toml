@@ -11,7 +11,7 @@ name = "lib"
 path = "src/lib.rs"
 
 [features]
-default = ["base-import", "btrfs", "grub", "import", "pacman"]
+default = ["base-import", "btrfs", "grub", "import", "apt"]
 apt = []
 base-import = []
 btrfs = ["dep:libbtrfs"]
