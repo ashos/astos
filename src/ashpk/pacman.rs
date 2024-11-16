@@ -146,8 +146,8 @@ pub fn cache_copy(snapshot: &str, prepare: bool) -> Result<(), Error> {
     let tmp = get_tmp();
     if prepare {
         Command::new("cp").args(["-n", "-r", "--reflink=auto"])
-                          .arg(format!("/.snapshots/rootfs/snapshot-{}/var/cache/pacman/pkg/.", snapshot))
-                          .arg(format!("/.snapshots/rootfs/snapshot-chr{}/var/cache/pacman/pkg", tmp))
+                          .arg(format!("/.snapshots/rootfs/snapshot-{}/var/cache/pacman/pkg/.", tmp))
+                          .arg(format!("/.snapshots/rootfs/snapshot-chr{}/var/cache/pacman/pkg", snapshot))
                           .output().unwrap();
     } else {
         Command::new("cp").args(["-n", "-r", "--reflink=auto"])

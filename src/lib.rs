@@ -500,6 +500,10 @@ pub fn chr_delete(snapshot: &str) -> Result<(), Error> {
     let chr_path = vec!["boot", "etc", "var"];
     for path in chr_path {
         if Path::new(&format!("/.snapshots/{}/{}-chr{}", path,path,snapshot)).try_exists()? {
+            // Copy cache back to tmp
+            if path == "var" {
+                cache_copy(snapshot, false)?;
+            }
             // Delete boot,etc and var subvolumes
             delete_subvolume(&format!("/.snapshots/{}/{}-chr{}", path,path,snapshot))?;
         }
@@ -3192,7 +3196,7 @@ pub fn snapshot_config_get(snapshot: &str) -> HashMap<String, String> {
         #[cfg(feature = "pacman")]
         options.insert(String::from("aur"), String::from("False"));
         options.insert(String::from("mutable_dirs"), String::new());
-        options.insert(String::from("mutable_dirs_shared"), String::new());
+        options.insert(String::from("mutable_dirs_shared"), String::from("var"));
         return options;
     } else {
         let optfile = File::open(format!("/.snapshots/etc/etc-{}/ash/ash.conf", snapshot)).unwrap();
