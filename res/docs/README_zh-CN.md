@@ -9,8 +9,6 @@
 # AshOS (Any Snapshot Hierarchical OS)
 ### An immutable tree-shaped meta-distribution using snapshots
 
----
-
 ## What is AshOS?
 
 AshOS is a unique meta-distribution that:
@@ -50,8 +48,6 @@ In AshOS, there are several keywords:
 
 * Thanks to its reliabilty and automatic upgrades, AshOS is well suitable for single use or embedded devices
 * It also makes for a good workstation or general use distribution utilizing development containers and flatpak for desktop applications
-
----
 
 ## AshOS Wiki?
 More information can be found on [AshOSWiki](https://github.com/ashos/ashos/wiki).
