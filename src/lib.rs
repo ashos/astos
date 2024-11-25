@@ -2129,6 +2129,21 @@ fn install_profile(snapshot: &str, profile: &str, force: bool, secondary: bool,
                 chroot_exec(&format!("/.snapshots/rootfs/snapshot-chr{}", snapshot), cmd)?;
             }
         }
+
+        // Ignore empty file
+        if !profconf.sections().contains(&"profile-packages".to_string()) &&
+            !profconf.sections().contains(&"disable-services".to_string()) &&
+            !profconf.sections().contains(&"enable-services".to_string()) &&
+            !profconf.sections().contains(&"install-commands".to_string())
+        {
+            if cfg!(feature = "pacman") && !profconf.sections().contains(&"presets".to_string()) {
+                    return Err(Error::new(ErrorKind::InvalidInput,
+                                          format!("The profile is empty or invalid.")));
+                } else {
+                    return Err(Error::new(ErrorKind::InvalidInput,
+                                          format!("The profile is empty or invalid.")));
+                }
+        }
     }
     Ok(secondary)
 }
@@ -2220,6 +2235,22 @@ fn install_profile_live(snapshot: &str,profile: &str, force: bool, user_profile:
                 chroot_exec(&format!("/.snapshots/rootfs/snapshot-{}", snapshot), cmd)?;
             }
         }
+
+        // Ignore empty file
+        if !profconf.sections().contains(&"profile-packages".to_string()) &&
+            !profconf.sections().contains(&"disable-services".to_string()) &&
+            !profconf.sections().contains(&"enable-services".to_string()) &&
+            !profconf.sections().contains(&"install-commands".to_string())
+        {
+            if cfg!(feature = "pacman") && !profconf.sections().contains(&"presets".to_string()) {
+                return Err(Error::new(ErrorKind::InvalidInput,
+                                          format!("The profile is empty or invalid.")));
+                } else {
+                    return Err(Error::new(ErrorKind::InvalidInput,
+                                          format!("The profile is empty or invalid.")));
+                }
+        }
+
     } else {
         return Err(Error::new(ErrorKind::Interrupted,
                               format!("System update failed.")));
@@ -3079,7 +3110,7 @@ pub fn reset() -> Result<(), Error> {
 pub fn rollback() -> Result<(), Error> {
     let tmp = "rollback";
     let i = find_new();
-    clone_as_tree(&tmp, "")?;
+    clone_as_tree(&tmp, "Rollback")?;
     deploy(&i.to_string(), false, false)?;
     Ok(())
 }
@@ -3879,6 +3910,14 @@ fn uninstall_profile(snapshot: &str, profile: &str, user_profile: &str, noconfir
             uninstall_package_helper(snapshot, &pkgs, noconfirm)?;
         }
 
+        // Ignore empty file
+        if !profconf.sections().contains(&"profile-packages".to_string()) &&
+            !profconf.sections().contains(&"install-commands".to_string())
+        {
+            return Err(Error::new(ErrorKind::InvalidInput,
+                                  format!("The profile is empty or invalid.")));
+        }
+
     }
     Ok(())
 }
@@ -3925,6 +3964,14 @@ fn uninstall_profile_live(snapshot: &str,profile: &str, user_profile: &str, noco
         for cmd in profconf.get_map().unwrap().get("uninstall-commands").unwrap().keys() {
             chroot_exec(&format!("/.snapshots/rootfs/snapshot-{}", snapshot), cmd)?;
         }
+    }
+
+    // Ignore empty file
+    if !profconf.sections().contains(&"profile-packages".to_string()) &&
+        !profconf.sections().contains(&"install-commands".to_string())
+    {
+        return Err(Error::new(ErrorKind::InvalidInput,
+                              format!("The profile is empty or invalid.")));
     }
 
     // Umount tmp
