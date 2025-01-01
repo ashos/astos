@@ -37,6 +37,7 @@ pub fn add_node_to_level(tree: &PyObject, id: &str, val: i32) -> Result<PyObject
         Ok(node)
     })
 }
+
 // Add child to node
 pub fn add_node_to_parent(tree: &PyObject, id: &str, val: i32) -> Result<PyObject, PyErr> {
     Python::with_gil(|py| {
